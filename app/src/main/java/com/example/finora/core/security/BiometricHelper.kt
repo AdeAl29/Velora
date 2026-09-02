@@ -1,6 +1,7 @@
 package com.example.finora.core.security
 
 import android.content.Context
+import android.os.Build
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
@@ -8,17 +9,39 @@ import androidx.fragment.app.FragmentActivity
 
 object BiometricHelper {
 
-    fun isBiometricAvailable(context: Context): Boolean {
+    enum class BiometricStatus {
+        AVAILABLE,
+        NONE_ENROLLED,
+        NO_HARDWARE,
+        UNAVAILABLE
+    }
+
+    fun checkBiometricStatus(context: Context): BiometricStatus {
         val biometricManager = BiometricManager.from(context)
-        val authenticators = BiometricManager.Authenticators.BIOMETRIC_STRONG or
-                BiometricManager.Authenticators.DEVICE_CREDENTIAL
-        return biometricManager.canAuthenticate(authenticators) == BiometricManager.BIOMETRIC_SUCCESS
+        val authenticators = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            BiometricManager.Authenticators.BIOMETRIC_STRONG or
+                    BiometricManager.Authenticators.DEVICE_CREDENTIAL
+        } else {
+            BiometricManager.Authenticators.BIOMETRIC_STRONG or
+                    BiometricManager.Authenticators.BIOMETRIC_WEAK
+        }
+
+        return when (biometricManager.canAuthenticate(authenticators)) {
+            BiometricManager.BIOMETRIC_SUCCESS -> BiometricStatus.AVAILABLE
+            BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED -> BiometricStatus.NONE_ENROLLED
+            BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE -> BiometricStatus.NO_HARDWARE
+            else -> BiometricStatus.UNAVAILABLE
+        }
+    }
+
+    fun isBiometricAvailable(context: Context): Boolean {
+        return checkBiometricStatus(context) == BiometricStatus.AVAILABLE
     }
 
     fun showBiometricPrompt(
         activity: FragmentActivity,
-        title: String = "Autentikasi Aruphia",
-        subtitle: String = "Gunakan sidik jari atau kunci layar untuk membuka",
+        title: String = "Autentikasi Sidik Jari Aruphia",
+        subtitle: String = "Sentuh sensor sidik jari untuk melanjutkan",
         onSuccess: () -> Unit,
         onError: (String) -> Unit
     ) {
@@ -39,20 +62,28 @@ object BiometricHelper {
 
                 override fun onAuthenticationFailed() {
                     super.onAuthenticationFailed()
-                    onError("Autentikasi tidak dikenali, coba lagi")
+                    onError("Sidik jari tidak cocok, coba lagi")
                 }
             }
         )
 
-        val promptInfo = BiometricPrompt.PromptInfo.Builder()
+        val promptInfoBuilder = BiometricPrompt.PromptInfo.Builder()
             .setTitle(title)
             .setSubtitle(subtitle)
-            .setAllowedAuthenticators(
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            promptInfoBuilder.setAllowedAuthenticators(
                 BiometricManager.Authenticators.BIOMETRIC_STRONG or
                         BiometricManager.Authenticators.DEVICE_CREDENTIAL
             )
-            .build()
+        } else {
+            promptInfoBuilder.setNegativeButtonText("Gunakan PIN / Batal")
+        }
 
-        prompt.authenticate(promptInfo)
+        try {
+            prompt.authenticate(promptInfoBuilder.build())
+        } catch (e: Exception) {
+            onError(e.message ?: "Gagal memanggil sensor sidik jari")
+        }
     }
 }

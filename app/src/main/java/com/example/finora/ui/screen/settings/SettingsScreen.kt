@@ -263,13 +263,77 @@ fun SettingsScreen(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
+                        val context = androidx.compose.ui.platform.LocalContext.current
+                        val activity = context as? androidx.fragment.app.FragmentActivity
+
                         SettingToggleItem(
                             icon = Icons.Rounded.Fingerprint,
                             title = "Kunci Aplikasi dengan Biometrik",
-                            description = "Memerlukan sidik jari atau PIN saat membuka aplikasi",
+                            description = if (uiState.isBiometricEnabled) "Aktif — Sidik jari atau PIN diperlukan saat membuka" else "Nonaktif — Sentuh untuk mengaktifkan proteksi sidik jari",
                             checked = uiState.isBiometricEnabled,
-                            onCheckedChange = viewModel::setBiometric
+                            onCheckedChange = { enable ->
+                                if (enable) {
+                                    if (activity != null) {
+                                        val status = com.example.finora.core.security.BiometricHelper.checkBiometricStatus(context)
+                                        when (status) {
+                                            com.example.finora.core.security.BiometricHelper.BiometricStatus.NONE_ENROLLED -> {
+                                                android.widget.Toast.makeText(context, "Daftarkan sidik jari di Pengaturan HP Anda terlebih dahulu", android.widget.Toast.LENGTH_LONG).show()
+                                            }
+                                            com.example.finora.core.security.BiometricHelper.BiometricStatus.NO_HARDWARE -> {
+                                                android.widget.Toast.makeText(context, "Perangkat ini tidak memiliki sensor sidik jari", android.widget.Toast.LENGTH_LONG).show()
+                                            }
+                                            else -> {
+                                                com.example.finora.core.security.BiometricHelper.showBiometricPrompt(
+                                                    activity = activity,
+                                                    title = "Verifikasi Sidik Jari",
+                                                    subtitle = "Sentuh sensor untuk mengaktifkan kunci aplikasi",
+                                                    onSuccess = {
+                                                        viewModel.setBiometric(true)
+                                                        android.widget.Toast.makeText(context, "Kunci sidik jari berhasil diaktifkan!", android.widget.Toast.LENGTH_SHORT).show()
+                                                    },
+                                                    onError = { err ->
+                                                        android.widget.Toast.makeText(context, "Batal/Gagal: $err", android.widget.Toast.LENGTH_SHORT).show()
+                                                    }
+                                                )
+                                            }
+                                        }
+                                    } else {
+                                        viewModel.setBiometric(true)
+                                    }
+                                } else {
+                                    viewModel.setBiometric(false)
+                                    android.widget.Toast.makeText(context, "Kunci sidik jari dinonaktifkan", android.widget.Toast.LENGTH_SHORT).show()
+                                }
+                            }
                         )
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        OutlinedButton(
+                            onClick = {
+                                if (activity != null) {
+                                    com.example.finora.core.security.BiometricHelper.showBiometricPrompt(
+                                        activity = activity,
+                                        title = "Uji Sensor Sidik Jari",
+                                        subtitle = "Sentuh sensor sidik jari ponsel Anda",
+                                        onSuccess = {
+                                            android.widget.Toast.makeText(context, "Sidik jari cocok! Sensor berfungsi sempurna.", android.widget.Toast.LENGTH_LONG).show()
+                                        },
+                                        onError = { err ->
+                                            android.widget.Toast.makeText(context, "Hasil: $err", android.widget.Toast.LENGTH_SHORT).show()
+                                        }
+                                    )
+                                } else {
+                                    android.widget.Toast.makeText(context, "Sensor siap digunakan", android.widget.Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(Icons.Rounded.Fingerprint, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Uji Coba Sensor Sidik Jari Sekarang", style = MaterialTheme.typography.labelLarge)
+                        }
 
                         HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
 

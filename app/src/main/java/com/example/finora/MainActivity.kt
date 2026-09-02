@@ -41,6 +41,18 @@ class MainActivity : FragmentActivity() {
             val isBiometricEnabled by dataStore.isBiometricEnabled.collectAsState(initial = false)
             var isUnlocked by remember { mutableStateOf(false) }
 
+            DisposableEffect(lifecycle) {
+                val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+                    if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP) {
+                        isUnlocked = false
+                    }
+                }
+                lifecycle.addObserver(observer)
+                onDispose {
+                    lifecycle.removeObserver(observer)
+                }
+            }
+
             val isDark = when (themeMode) {
                 "dark" -> true
                 "light" -> false

@@ -17,6 +17,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.finora.ui.theme.FinoraPrimary
 import com.example.finora.ui.theme.FinoraTextStyles
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -139,6 +140,16 @@ fun MoreScreen(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
+                        MoreMenuItem(
+                            icon = Icons.Rounded.Fingerprint,
+                            title = "Kunci Sidik Jari / Biometrik",
+                            subtitle = "Aktifkan proteksi sidik jari & uji sensor",
+                            iconColor = FinoraPrimary,
+                            onClick = onNavigateToSettings
+                        )
+
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+
                         MoreMenuItem(
                             icon = Icons.Rounded.Settings,
                             title = "Pengaturan Umum",
