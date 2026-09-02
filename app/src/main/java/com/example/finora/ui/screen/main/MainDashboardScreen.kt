@@ -129,7 +129,7 @@ fun MainDashboardScreen(
         Box(
             modifier = modifier
                 .fillMaxSize()
-                .padding(bottom = 12.dp)
+                .padding(top = paddingValues.calculateTopPadding(), bottom = 12.dp)
         ) {
             when (selectedTabIndex) {
                 0 -> {

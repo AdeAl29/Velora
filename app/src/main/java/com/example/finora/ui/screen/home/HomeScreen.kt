@@ -47,7 +47,7 @@ fun HomeScreen(
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 100.dp),
+        contentPadding = PaddingValues(top = 12.dp, bottom = 100.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
         // Greeting Header
@@ -58,25 +58,30 @@ fun HomeScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(
                             text = "${DateUtils.getGreeting()} ${DateUtils.getGreetingEmoji()}",
-                            style = MaterialTheme.typography.bodyMedium,
+                            style = MaterialTheme.typography.titleSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        if (uiState.userName.isNotBlank()) {
-                            Text(
-                                text = uiState.userName,
-                                style = MaterialTheme.typography.headlineMedium,
-                                color = MaterialTheme.colorScheme.onBackground
-                            )
-                        }
+                        Text(
+                            text = uiState.userName.ifBlank { "Kelola Keuanganmu" },
+                            style = MaterialTheme.typography.headlineMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onBackground
+                        )
                     }
-                    IconButton(onClick = onNavigateToSearch) {
+                    IconButton(
+                        onClick = onNavigateToSearch,
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(androidx.compose.foundation.shape.CircleShape)
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                    ) {
                         Icon(
                             Icons.Rounded.Search,
                             contentDescription = "Cari",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            tint = MaterialTheme.colorScheme.onSurface
                         )
                     }
                 }
