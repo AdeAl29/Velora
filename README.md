@@ -1,4 +1,4 @@
-# Velora (Finora) — Personal Finance Management Android App
+# Aruphia — Personal Finance Management Android App
 
 <p align="center">
   <b>Aplikasi Manajemen Keuangan Pribadi Modern, Elegan, dan Komprehensif</b>

@@ -199,7 +199,7 @@ private fun OnboardingSetupForm(
         Spacer(modifier = Modifier.height(16.dp))
 
         Text(
-            text = "Setup Akun Finora",
+            text = "Setup Akun Aruphia",
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onBackground
@@ -283,7 +283,7 @@ private fun OnboardingSetupForm(
         Spacer(modifier = Modifier.height(36.dp))
 
         FinoraPrimaryButton(
-            text = "Mulai Masuk ke Finora",
+            text = "Mulai Masuk ke Aruphia",
             onClick = viewModel::completeSetup,
             isLoading = uiState.isLoading
         )

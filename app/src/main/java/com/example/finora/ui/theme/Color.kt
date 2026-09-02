@@ -16,16 +16,16 @@ val FinoraLightSurfaceVariant = Color(0xFFF1F5F9)
 val FinoraLightSurfaceElevated = Color(0xFFE8ECF4)
 val FinoraLightBorder = Color(0xFFE2E8F0)
 
-// ===== PRIMARY BRAND COLORS =====
-val FinoraPrimary = Color(0xFF6C63FF)
-val FinoraPrimaryLight = Color(0xFFA78BFA)
-val FinoraPrimaryDark = Color(0xFF4F46E5)
-val FinoraPrimaryContainer = Color(0xFF1E1B4B)
-val FinoraPrimaryContainerLight = Color(0xFFEDE9FE)
+// ===== PRIMARY BRAND COLORS (Aruphia Modern Blue) =====
+val FinoraPrimary = Color(0xFF2563EB)
+val FinoraPrimaryLight = Color(0xFF60A5FA)
+val FinoraPrimaryDark = Color(0xFF1D4ED8)
+val FinoraPrimaryContainer = Color(0xFF1E3A8A)
+val FinoraPrimaryContainerLight = Color(0xFFDBEAFE)
 
-// ===== SECONDARY / ACCENT =====
-val FinoraSecondary = Color(0xFF38BDF8)
-val FinoraSecondaryDark = Color(0xFF0EA5E9)
+// ===== SECONDARY / ACCENT (Ocean Cyan / Cerulean) =====
+val FinoraSecondary = Color(0xFF0EA5E9)
+val FinoraSecondaryDark = Color(0xFF0284C7)
 val FinoraSecondaryContainer = Color(0xFF0C4A6E)
 val FinoraSecondaryContainerLight = Color(0xFFE0F2FE)
 
@@ -82,12 +82,12 @@ val CategoryInstallmentColor = Color(0xFFF472B6)
 val CategoryBillColor = Color(0xFFFB923C)
 
 // ===== GRADIENT DEFINITIONS =====
-val FinoraPrimaryGradient = listOf(Color(0xFF6C63FF), Color(0xFFA78BFA))
+val FinoraPrimaryGradient = listOf(Color(0xFF2563EB), Color(0xFF0EA5E9))
 val FinoraIncomeGradient = listOf(Color(0xFF34D399), Color(0xFF6EE7B7))
 val FinoraExpenseGradient = listOf(Color(0xFFF87171), Color(0xFFFCA5A5))
 val FinoraCardGradient = listOf(Color(0xFF1C2237), Color(0xFF232940))
 val FinoraCardGradientLight = listOf(Color(0xFFFFFFFF), Color(0xFFF8FAFC))
-val FinoraBalanceGradient = listOf(Color(0xFF6C63FF), Color(0xFF38BDF8))
+val FinoraBalanceGradient = listOf(Color(0xFF1D4ED8), Color(0xFF2563EB), Color(0xFF38BDF8))
 
 fun getCategoryColor(colorHex: String): Color {
     return try {

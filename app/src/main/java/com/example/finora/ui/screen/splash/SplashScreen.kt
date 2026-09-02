@@ -80,7 +80,7 @@ fun SplashScreen(
             ) {
                 Icon(
                     imageVector = Icons.Rounded.AccountBalanceWallet,
-                    contentDescription = "Finora Logo",
+                    contentDescription = "Aruphia Logo",
                     tint = Color.White,
                     modifier = Modifier.size(52.dp)
                 )
@@ -89,7 +89,7 @@ fun SplashScreen(
             Spacer(modifier = Modifier.height(24.dp))
 
             Text(
-                text = "Finora",
+                text = "Aruphia",
                 style = MaterialTheme.typography.displayMedium,
                 fontWeight = FontWeight.Bold,
                 color = Color.White,

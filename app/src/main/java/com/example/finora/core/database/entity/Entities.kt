@@ -61,7 +61,7 @@ data class WalletEntity(
     val name: String,
     val iconName: String,
     val initialBalance: Long = 0,
-    val colorHex: String = "#6C63FF",
+    val colorHex: String = "#2563EB",
     val isActive: Boolean = true,
     val createdAt: Long = System.currentTimeMillis()
 )
@@ -120,7 +120,7 @@ data class FinancialGoalEntity(
     val targetAmount: Long,
     val currentAmount: Long = 0,
     val iconName: String = "target",
-    val colorHex: String = "#6C63FF",
+    val colorHex: String = "#2563EB",
     val deadline: Long? = null,
     val priority: Int = 2,
     val isCompleted: Boolean = false,
