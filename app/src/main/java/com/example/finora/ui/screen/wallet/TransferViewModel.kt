@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import com.example.finora.core.audio.SoundEffectManager
 
 data class TransferUiState(
     val wallets: List<WalletEntity> = emptyList(),
@@ -27,7 +28,8 @@ data class TransferUiState(
 
 @HiltViewModel
 class TransferViewModel @Inject constructor(
-    private val walletRepository: WalletRepository
+    private val walletRepository: WalletRepository,
+    private val soundEffectManager: SoundEffectManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(TransferUiState())
@@ -96,6 +98,7 @@ class TransferViewModel @Inject constructor(
                     amount = amountLong,
                     note = state.note.takeIf { it.isNotBlank() }
                 )
+                soundEffectManager.playWhoosh()
                 _uiState.update { it.copy(isLoading = false, isSaved = true) }
             } catch (e: Exception) {
                 _uiState.update { it.copy(isLoading = false, errorMessage = e.message) }

@@ -101,6 +101,15 @@ dependencies {
     // Kotlin Serialization
     implementation(libs.kotlinx.serialization.json)
 
+    // AI / ML Kit OCR
+    implementation(libs.mlkit.text.recognition)
+
+    // Biometrics
+    implementation(libs.androidx.biometric)
+
+    // Lottie Compose
+    implementation(libs.lottie.compose)
+
     // Tooling
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)

@@ -33,6 +33,8 @@ class FinoraDataStore @Inject constructor(
         val SAMPLE_DATA_LOADED = booleanPreferencesKey("sample_data_loaded")
         val APP_LOCK_ENABLED = booleanPreferencesKey("app_lock_enabled")
         val APP_LOCK_PIN = stringPreferencesKey("app_lock_pin")
+        val BIOMETRIC_ENABLED = booleanPreferencesKey("biometric_enabled")
+        val SOUND_ENABLED = booleanPreferencesKey("sound_enabled")
     }
 
     val isOnboardingCompleted: Flow<Boolean> = dataStore.data
@@ -75,6 +77,14 @@ class FinoraDataStore @Inject constructor(
         .catch { if (it is IOException) emit(emptyPreferences()) else throw it }
         .map { it[APP_LOCK_ENABLED] ?: false }
 
+    val isBiometricEnabled: Flow<Boolean> = dataStore.data
+        .catch { if (it is IOException) emit(emptyPreferences()) else throw it }
+        .map { it[BIOMETRIC_ENABLED] ?: false }
+
+    val isSoundEnabled: Flow<Boolean> = dataStore.data
+        .catch { if (it is IOException) emit(emptyPreferences()) else throw it }
+        .map { it[SOUND_ENABLED] ?: true }
+
     suspend fun setOnboardingCompleted(completed: Boolean) {
         dataStore.edit { it[ONBOARDING_COMPLETED] = completed }
     }
@@ -113,6 +123,14 @@ class FinoraDataStore @Inject constructor(
 
     suspend fun setAppLockEnabled(enabled: Boolean) {
         dataStore.edit { it[APP_LOCK_ENABLED] = enabled }
+    }
+
+    suspend fun setBiometricEnabled(enabled: Boolean) {
+        dataStore.edit { it[BIOMETRIC_ENABLED] = enabled }
+    }
+
+    suspend fun setSoundEnabled(enabled: Boolean) {
+        dataStore.edit { it[SOUND_ENABLED] = enabled }
     }
 
     suspend fun setAppLockPin(pin: String) {

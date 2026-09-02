@@ -247,6 +247,19 @@ fun GoalDetailScreen(
                         modifier = Modifier.padding(20.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
+                        if (pct >= 100f) {
+                            com.example.finora.ui.components.lottie.AruphiaLottieView(
+                                resId = com.example.finora.R.raw.anim_confetti,
+                                size = 140.dp
+                            )
+                            Text(
+                                text = "🎉 Target Finansial Tercapai!",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = FinoraIncome,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
                         Text(
                             text = "${String.format("%.1f", pct)}%",
                             style = FinoraTextStyles.balanceDisplay,

@@ -21,6 +21,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.launch
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -58,11 +60,77 @@ fun AddTransactionScreen(
         }
     }
 
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var isScanning by remember { mutableStateOf(false) }
+    var scanMessage by remember { mutableStateOf<String?>(null) }
+    var showScanDialog by remember { mutableStateOf(false) }
+
+    val cameraLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.TakePicturePreview()
+    ) { bitmap ->
+        if (bitmap != null) {
+            scope.launch {
+                isScanning = true
+                val result = com.example.finora.core.ocr.ReceiptScanner.scanFromBitmap(bitmap)
+                isScanning = false
+                if (result.totalAmount != null || result.merchantName != null) {
+                    viewModel.applyScannedReceipt(result)
+                    scanMessage = "Struk berhasil dipindai! Nominal & Toko terisi otomatis."
+                } else {
+                    scanMessage = "Teks struk kurang terbaca, silakan cek foto atau input manual."
+                }
+            }
+        }
+    }
+
+    val galleryLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                isScanning = true
+                val result = com.example.finora.core.ocr.ReceiptScanner.scanFromUri(context, uri)
+                isScanning = false
+                if (result.totalAmount != null || result.merchantName != null) {
+                    viewModel.applyScannedReceipt(result)
+                    scanMessage = "Struk berhasil dipindai! Nominal & Toko terisi otomatis."
+                } else {
+                    scanMessage = "Teks struk kurang terbaca, silakan cek foto atau input manual."
+                }
+            }
+        }
+    }
+
+    if (showScanDialog) {
+        AlertDialog(
+            onDismissRequest = { showScanDialog = false },
+            title = { Text("Pindai Struk Belanja", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold) },
+            text = { Text("Pilih sumber foto struk fisik Anda untuk dianalisis oleh AI OCR secara offline.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showScanDialog = false
+                    cameraLauncher.launch(null)
+                }) {
+                    Text("Buka Kamera")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showScanDialog = false
+                    galleryLauncher.launch("image/*")
+                }) {
+                    Text("Pilih dari Galeri")
+                }
+            }
+        )
+    }
+
     // Success state
     LaunchedEffect(uiState.isSaved) {
         if (uiState.isSaved) {
             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-            kotlinx.coroutines.delay(300)
+            kotlinx.coroutines.delay(650)
             onSaved()
         }
     }
@@ -76,11 +144,9 @@ fun AddTransactionScreen(
             contentAlignment = Alignment.Center
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(
-                    Icons.Rounded.CheckCircle,
-                    contentDescription = null,
-                    tint = FinoraIncome,
-                    modifier = Modifier.size(64.dp)
+                com.example.finora.ui.components.lottie.AruphiaLottieView(
+                    resId = com.example.finora.R.raw.anim_success,
+                    size = 110.dp
                 )
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
@@ -116,7 +182,7 @@ fun AddTransactionScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Rounded.ArrowBack, contentDescription = "Kembali")
+                        Icon(Icons.Rounded.ChevronLeft, contentDescription = "Kembali")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -138,7 +204,76 @@ fun AddTransactionScreen(
                 onTypeSelected = viewModel::setTransactionType
             )
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // AI Receipt Scanner Banner
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showScanDialog = true },
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = FinoraPrimary.copy(alpha = 0.10f))
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(FinoraPrimary),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.CameraAlt,
+                            contentDescription = "Scan Struk",
+                            tint = Color.White,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(14.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Pindai Struk dengan AI",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = FinoraPrimary,
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                        )
+                        Text(
+                            text = "Foto struk belanja untuk auto-fill nominal & toko",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    if (isScanning) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp,
+                            color = FinoraPrimary
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Rounded.ChevronRight,
+                            contentDescription = null,
+                            tint = FinoraPrimary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            }
+
+            if (scanMessage != null) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = scanMessage!!,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = FinoraPrimary,
+                    modifier = Modifier.padding(horizontal = 4.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
 
             // Amount input
             Column(horizontalAlignment = Alignment.CenterHorizontally) {

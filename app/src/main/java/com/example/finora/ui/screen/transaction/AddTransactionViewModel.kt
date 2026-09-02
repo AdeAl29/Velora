@@ -10,6 +10,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import com.example.finora.core.audio.SoundEffectManager
 
 data class AddTransactionUiState(
     val transactionType: TransactionType = TransactionType.EXPENSE_VARIABLE,
@@ -39,7 +40,8 @@ data class AddTransactionUiState(
 class AddTransactionViewModel @Inject constructor(
     private val transactionRepository: TransactionRepository,
     private val categoryRepository: CategoryRepository,
-    private val walletRepository: WalletRepository
+    private val walletRepository: WalletRepository,
+    private val soundEffectManager: SoundEffectManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(AddTransactionUiState())
@@ -141,6 +143,24 @@ class AddTransactionViewModel @Inject constructor(
         }
     }
 
+    fun applyScannedReceipt(scanned: com.example.finora.core.ocr.ScannedReceipt) {
+        val matchingCat = scanned.detectedCategoryHint?.let { hint ->
+            _uiState.value.categories.firstOrNull { it.name.equals(hint, ignoreCase = true) }
+        }
+
+        _uiState.update { state ->
+            state.copy(
+                amount = scanned.totalAmount?.toString() ?: state.amount,
+                note = scanned.merchantName ?: state.note,
+                date = scanned.date ?: state.date,
+                selectedCategoryId = matchingCat?.id ?: state.selectedCategoryId,
+                selectedCategory = matchingCat ?: state.selectedCategory,
+                amountError = null,
+                categoryError = null
+            )
+        }
+    }
+
     fun save() {
         val state = _uiState.value
 
@@ -182,6 +202,12 @@ class AddTransactionViewModel @Inject constructor(
                     transactionRepository.update(transaction)
                 } else {
                     transactionRepository.insert(transaction)
+                }
+
+                if (state.transactionType == TransactionType.INCOME) {
+                    soundEffectManager.playChaChing()
+                } else {
+                    soundEffectManager.playSuccess()
                 }
 
                 _uiState.update { it.copy(isLoading = false, isSaved = true) }

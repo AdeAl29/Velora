@@ -20,8 +20,12 @@ import dagger.hilt.android.AndroidEntryPoint
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 
+import androidx.fragment.app.FragmentActivity
+import androidx.compose.runtime.*
+import com.example.finora.ui.screen.lock.AppLockScreen
+
 @AndroidEntryPoint
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
 
     @Inject
     lateinit var dataStore: FinoraDataStore
@@ -34,6 +38,9 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val themeMode by dataStore.themeMode.collectAsState(initial = "system")
+            val isBiometricEnabled by dataStore.isBiometricEnabled.collectAsState(initial = false)
+            var isUnlocked by remember { mutableStateOf(false) }
+
             val isDark = when (themeMode) {
                 "dark" -> true
                 "light" -> false
@@ -45,7 +52,11 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    MainNavigation(dataStore = dataStore)
+                    if (isBiometricEnabled && !isUnlocked) {
+                        AppLockScreen(onUnlocked = { isUnlocked = true })
+                    } else {
+                        MainNavigation(dataStore = dataStore)
+                    }
                 }
             }
         }

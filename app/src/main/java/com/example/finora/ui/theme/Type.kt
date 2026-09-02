@@ -7,9 +7,12 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
-// Using default sans-serif which maps to Roboto on Android
-// For production, bundle Inter font files in res/font/
-val FinoraFontFamily = FontFamily.Default
+val FinoraFontFamily = FontFamily(
+    Font(com.example.finora.R.font.plus_jakarta_sans, FontWeight.Normal),
+    Font(com.example.finora.R.font.plus_jakarta_sans, FontWeight.Medium),
+    Font(com.example.finora.R.font.plus_jakarta_sans, FontWeight.SemiBold),
+    Font(com.example.finora.R.font.plus_jakarta_sans, FontWeight.Bold)
+)
 
 val FinoraTypography = Typography(
     displayLarge = TextStyle(

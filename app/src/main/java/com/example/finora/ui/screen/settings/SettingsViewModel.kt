@@ -20,6 +20,8 @@ data class SettingsUiState(
     val isGoalReminderEnabled: Boolean = true,
     val isSampleDataLoaded: Boolean = false,
     val isAppLockEnabled: Boolean = false,
+    val isBiometricEnabled: Boolean = false,
+    val isSoundEnabled: Boolean = true,
     val isLoading: Boolean = false,
     val successMessage: String? = null
 )
@@ -75,6 +77,28 @@ class SettingsViewModel @Inject constructor(
             dataStore.isSampleDataLoaded.collect { sampleLoaded ->
                 _uiState.update { it.copy(isSampleDataLoaded = sampleLoaded) }
             }
+        }
+        viewModelScope.launch {
+            dataStore.isBiometricEnabled.collect { bio ->
+                _uiState.update { it.copy(isBiometricEnabled = bio) }
+            }
+        }
+        viewModelScope.launch {
+            dataStore.isSoundEnabled.collect { snd ->
+                _uiState.update { it.copy(isSoundEnabled = snd) }
+            }
+        }
+    }
+
+    fun setBiometric(enabled: Boolean) {
+        viewModelScope.launch {
+            dataStore.setBiometricEnabled(enabled)
+        }
+    }
+
+    fun setSound(enabled: Boolean) {
+        viewModelScope.launch {
+            dataStore.setSoundEnabled(enabled)
         }
     }
 

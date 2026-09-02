@@ -252,6 +252,38 @@ fun SettingsScreen(
                 }
             }
 
+            // Security & Audio Feedback Section
+            item {
+                Text("Keamanan & Suara", style = FinoraTextStyles.sectionTitle, color = MaterialTheme.colorScheme.onBackground)
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        SettingToggleItem(
+                            icon = Icons.Rounded.Fingerprint,
+                            title = "Kunci Aplikasi dengan Biometrik",
+                            description = "Memerlukan sidik jari atau PIN saat membuka aplikasi",
+                            checked = uiState.isBiometricEnabled,
+                            onCheckedChange = viewModel::setBiometric
+                        )
+
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+
+                        SettingToggleItem(
+                            icon = Icons.Rounded.VolumeUp,
+                            title = "Efek Suara Transaksi",
+                            description = "Memutar suara feedback saat mencatat pemasukan atau transfer saldo",
+                            checked = uiState.isSoundEnabled,
+                            onCheckedChange = viewModel::setSound
+                        )
+                    }
+                }
+            }
+
             // Data Management Section
             item {
                 Text("Manajemen Data", style = FinoraTextStyles.sectionTitle, color = MaterialTheme.colorScheme.onBackground)
