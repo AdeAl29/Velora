@@ -315,10 +315,11 @@ private fun SummaryCard(
                 )
             }
             if (percentage != null) {
+                val safePercent = if (percentage.isFinite()) percentage else 0f
                 Text(
-                    text = "${String.format("%.1f", percentage)}%",
+                    text = "${String.format(java.util.Locale.US, "%.1f", safePercent)}%",
                     style = FinoraTextStyles.currencyAmount,
-                    color = if (percentage > 30) FinoraColors.income() else FinoraColors.expense()
+                    color = if (safePercent > 30) FinoraColors.income() else FinoraColors.expense()
                 )
             }
         }

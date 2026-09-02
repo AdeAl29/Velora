@@ -51,11 +51,6 @@ fun MainDashboardScreen(
     var selectedTabIndex by remember { mutableIntStateOf(0) }
     var showAddSheet by remember { mutableStateOf(false) }
 
-    val homeViewModel: HomeViewModel = hiltViewModel()
-    val transactionListViewModel: TransactionListViewModel = hiltViewModel()
-    val statisticsViewModel: StatisticsViewModel = hiltViewModel()
-    val goalViewModel: GoalViewModel = hiltViewModel()
-
     if (showAddSheet) {
         ModalBottomSheet(
             onDismissRequest = { showAddSheet = false },
@@ -137,29 +132,41 @@ fun MainDashboardScreen(
                 .padding(bottom = 12.dp)
         ) {
             when (selectedTabIndex) {
-                0 -> HomeScreen(
-                    viewModel = homeViewModel,
-                    onNavigateToTransactionDetail = onNavigateToTransactionDetail,
-                    onNavigateToAllTransactions = { selectedTabIndex = 1 },
-                    onNavigateToAllGoals = { selectedTabIndex = 3 },
-                    onNavigateToGoalDetail = onNavigateToGoalDetail,
-                    onNavigateToSearch = onNavigateToSearch
-                )
-                1 -> TransactionListScreen(
-                    viewModel = transactionListViewModel,
-                    onNavigateToDetail = onNavigateToTransactionDetail,
-                    onNavigateToAdd = { onNavigateToAddTransaction(null) }
-                )
-                2 -> StatisticsScreen(
-                    viewModel = statisticsViewModel,
-                    onNavigateBack = { selectedTabIndex = 0 }
-                )
-                3 -> GoalListScreen(
-                    viewModel = goalViewModel,
-                    onNavigateBack = { selectedTabIndex = 0 },
-                    onNavigateToAddGoal = onNavigateToAddGoal,
-                    onNavigateToGoalDetail = onNavigateToGoalDetail
-                )
+                0 -> {
+                    val homeViewModel: HomeViewModel = hiltViewModel()
+                    HomeScreen(
+                        viewModel = homeViewModel,
+                        onNavigateToTransactionDetail = onNavigateToTransactionDetail,
+                        onNavigateToAllTransactions = { selectedTabIndex = 1 },
+                        onNavigateToAllGoals = { selectedTabIndex = 3 },
+                        onNavigateToGoalDetail = onNavigateToGoalDetail,
+                        onNavigateToSearch = onNavigateToSearch
+                    )
+                }
+                1 -> {
+                    val transactionListViewModel: TransactionListViewModel = hiltViewModel()
+                    TransactionListScreen(
+                        viewModel = transactionListViewModel,
+                        onNavigateToDetail = onNavigateToTransactionDetail,
+                        onNavigateToAdd = { onNavigateToAddTransaction(null) }
+                    )
+                }
+                2 -> {
+                    val statisticsViewModel: StatisticsViewModel = hiltViewModel()
+                    StatisticsScreen(
+                        viewModel = statisticsViewModel,
+                        onNavigateBack = { selectedTabIndex = 0 }
+                    )
+                }
+                3 -> {
+                    val goalViewModel: GoalViewModel = hiltViewModel()
+                    GoalListScreen(
+                        viewModel = goalViewModel,
+                        onNavigateBack = { selectedTabIndex = 0 },
+                        onNavigateToAddGoal = onNavigateToAddGoal,
+                        onNavigateToGoalDetail = onNavigateToGoalDetail
+                    )
+                }
                 4 -> MoreScreen(
                     onNavigateToWallets = onNavigateToWallets,
                     onNavigateToBudgets = onNavigateToBudgets,

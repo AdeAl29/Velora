@@ -27,7 +27,23 @@ class FinoraApplication : Application(), Configuration.Provider {
 
     override fun onCreate() {
         super.onCreate()
+        setupGlobalCrashHandler()
         createNotificationChannels()
+    }
+
+    private fun setupGlobalCrashHandler() {
+        val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            android.util.Log.e("FinoraCrash", "FATAL CRASH in thread ${thread.name}", throwable)
+            try {
+                val logFile = java.io.File(filesDir, "finora_crash.log")
+                java.io.PrintWriter(logFile).use { writer ->
+                    throwable.printStackTrace(writer)
+                }
+            } catch (_: Exception) {
+            }
+            defaultHandler?.uncaughtException(thread, throwable)
+        }
     }
 
     private fun createNotificationChannels() {

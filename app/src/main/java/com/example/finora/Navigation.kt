@@ -33,7 +33,7 @@ fun MainNavigation(dataStore: FinoraDataStore) {
 
     NavDisplay(
         backStack = backStack,
-        onBack = { backStack.removeLastOrNull() },
+        onBack = { if (backStack.size > 1) backStack.removeLastOrNull() },
         entryProvider = entryProvider {
             // 1. Splash Screen
             entry<SplashRoute> {

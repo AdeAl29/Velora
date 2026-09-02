@@ -52,16 +52,14 @@ fun FinoraBalanceCard(
                             FinoraPrimary,
                             FinoraPrimary.copy(alpha = 0.85f),
                             FinoraSecondary.copy(alpha = 0.7f)
-                        ),
-                        start = Offset(0f, 0f),
-                        end = Offset(Float.MAX_VALUE, Float.MAX_VALUE)
+                        )
                     ),
                     shape = RoundedCornerShape(24.dp)
                 )
                 .clip(RoundedCornerShape(24.dp))
         ) {
             // Decorative background pattern
-            Canvas(modifier = Modifier.fillMaxSize()) {
+            Canvas(modifier = Modifier.matchParentSize()) {
                 val w = size.width
                 val h = size.height
                 // Subtle circles
@@ -120,10 +118,11 @@ fun FinoraBalanceCard(
 
                 // Percentage change
                 if (!isBalanceHidden) {
+                    val safePercent = if (percentChange.isFinite()) percentChange else 0f
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        val isPositive = percentChange >= 0
+                        val isPositive = safePercent >= 0
                         Text(
-                            text = "${if (isPositive) "↑" else "↓"} ${String.format("%.1f", kotlin.math.abs(percentChange))}%",
+                            text = "${if (isPositive) "↑" else "↓"} ${String.format(java.util.Locale.US, "%.1f", kotlin.math.abs(safePercent))}%",
                             style = MaterialTheme.typography.bodySmall,
                             color = if (isPositive) Color(0xFF6EE7B7) else Color(0xFFFCA5A5),
                             fontWeight = FontWeight.Medium
@@ -137,7 +136,7 @@ fun FinoraBalanceCard(
                 }
 
                 // Sparkline
-                if (sparklineData.isNotEmpty() && !isBalanceHidden) {
+                if (sparklineData.isNotEmpty() && sparklineData.any { it > 0f } && !isBalanceHidden) {
                     Spacer(modifier = Modifier.height(16.dp))
                     MiniSparkline(
                         data = sparklineData,
@@ -218,8 +217,8 @@ private fun MiniSparkline(
         if (data.size < 2) return@Canvas
         val w = size.width
         val h = size.height
-        val maxVal = data.max()
-        val minVal = data.min()
+        val maxVal = data.maxOrNull() ?: 0f
+        val minVal = data.minOrNull() ?: 0f
         val range = if (maxVal == minVal) 1f else maxVal - minVal
 
         val points = data.mapIndexed { index, value ->
