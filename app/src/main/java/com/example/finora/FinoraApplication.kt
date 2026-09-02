@@ -17,7 +17,12 @@ class FinoraApplication : Application(), Configuration.Provider {
 
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
-            .setWorkerFactory(workerFactory)
+            .setMinimumLoggingLevel(android.util.Log.INFO)
+            .apply {
+                if (::workerFactory.isInitialized) {
+                    setWorkerFactory(workerFactory)
+                }
+            }
             .build()
 
     override fun onCreate() {

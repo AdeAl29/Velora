@@ -40,12 +40,12 @@ fun MainNavigation(dataStore: FinoraDataStore) {
                 SplashScreen(
                     dataStore = dataStore,
                     onNavigateToOnboarding = {
-                        backStack.clear()
                         backStack.add(OnboardingRoute)
+                        backStack.remove(SplashRoute)
                     },
                     onNavigateToMain = {
-                        backStack.clear()
                         backStack.add(MainDashboardRoute)
+                        backStack.remove(SplashRoute)
                     }
                 )
             }
@@ -56,8 +56,8 @@ fun MainNavigation(dataStore: FinoraDataStore) {
                 OnboardingScreen(
                     viewModel = vm,
                     onOnboardingFinished = {
-                        backStack.clear()
                         backStack.add(MainDashboardRoute)
+                        backStack.remove(OnboardingRoute)
                     }
                 )
             }

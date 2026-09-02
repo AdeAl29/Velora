@@ -52,32 +52,36 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun scheduleBackgroundWorkers() {
-        val workManager = WorkManager.getInstance(this)
+        try {
+            val workManager = WorkManager.getInstance(this)
 
-        val constraints = Constraints.Builder()
-            .setRequiresBatteryNotLow(true)
-            .build()
+            val constraints = Constraints.Builder()
+                .setRequiresBatteryNotLow(true)
+                .build()
 
-        // Recurring transactions check every 12 hours
-        val recurringWork = PeriodicWorkRequestBuilder<RecurringTransactionWorker>(12, TimeUnit.HOURS)
-            .setConstraints(constraints)
-            .build()
+            // Recurring transactions check every 12 hours
+            val recurringWork = PeriodicWorkRequestBuilder<RecurringTransactionWorker>(12, TimeUnit.HOURS)
+                .setConstraints(constraints)
+                .build()
 
-        workManager.enqueueUniquePeriodicWork(
-            "finora_recurring_worker",
-            ExistingPeriodicWorkPolicy.KEEP,
-            recurringWork
-        )
+            workManager.enqueueUniquePeriodicWork(
+                "finora_recurring_worker",
+                ExistingPeriodicWorkPolicy.KEEP,
+                recurringWork
+            )
 
-        // Bill reminders check daily
-        val billReminderWork = PeriodicWorkRequestBuilder<BillReminderWorker>(24, TimeUnit.HOURS)
-            .setConstraints(constraints)
-            .build()
+            // Bill reminders check daily
+            val billReminderWork = PeriodicWorkRequestBuilder<BillReminderWorker>(24, TimeUnit.HOURS)
+                .setConstraints(constraints)
+                .build()
 
-        workManager.enqueueUniquePeriodicWork(
-            "finora_bill_reminder_worker",
-            ExistingPeriodicWorkPolicy.KEEP,
-            billReminderWork
-        )
+            workManager.enqueueUniquePeriodicWork(
+                "finora_bill_reminder_worker",
+                ExistingPeriodicWorkPolicy.KEEP,
+                billReminderWork
+            )
+        } catch (e: Exception) {
+            android.util.Log.e("Finora", "Failed to schedule background workers", e)
+        }
     }
 }

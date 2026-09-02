@@ -48,48 +48,57 @@ abstract class FinoraDatabase : RoomDatabase() {
                 .addCallback(object : Callback() {
                     override fun onCreate(db: SupportSQLiteDatabase) {
                         super.onCreate(db)
-                        CoroutineScope(Dispatchers.IO).launch {
-                            val database = buildDatabase(context)
-                            populateDefaultCategories(database.categoryDao())
-                        }
+                        insertDefaultCategories(db)
                     }
                 })
                 .fallbackToDestructiveMigration()
                 .build()
         }
 
-        private suspend fun populateDefaultCategories(categoryDao: CategoryDao) {
+        private fun insertDefaultCategories(db: SupportSQLiteDatabase) {
             val categories = listOf(
-                // Income categories
-                CategoryEntity(name = "Gaji", iconName = "salary", colorHex = "#34D399", type = "INCOME", sortOrder = 0),
-                CategoryEntity(name = "Uang Saku", iconName = "pocket_money", colorHex = "#6EE7B7", type = "INCOME", sortOrder = 1),
-                CategoryEntity(name = "Bonus", iconName = "bonus", colorHex = "#A78BFA", type = "INCOME", sortOrder = 2),
-                CategoryEntity(name = "Freelance", iconName = "freelance", colorHex = "#38BDF8", type = "INCOME", sortOrder = 3),
-                CategoryEntity(name = "Hadiah", iconName = "gift", colorHex = "#FB7185", type = "INCOME", sortOrder = 4),
-                CategoryEntity(name = "Investasi", iconName = "investment", colorHex = "#FBBF24", type = "INCOME", sortOrder = 5),
-                CategoryEntity(name = "Lainnya", iconName = "other", colorHex = "#94A3B8", type = "INCOME", sortOrder = 6),
+                // Income categories (type = INCOME)
+                arrayOf("Gaji", "salary", "#34D399", "INCOME", "0", "1", "0"),
+                arrayOf("Uang Saku", "pocket_money", "#6EE7B7", "INCOME", "0", "1", "1"),
+                arrayOf("Bonus", "bonus", "#A78BFA", "INCOME", "0", "1", "2"),
+                arrayOf("Freelance", "freelance", "#38BDF8", "INCOME", "0", "1", "3"),
+                arrayOf("Hadiah", "gift", "#FB7185", "INCOME", "0", "1", "4"),
+                arrayOf("Investasi", "investment", "#FBBF24", "INCOME", "0", "1", "5"),
+                arrayOf("Lainnya", "other", "#94A3B8", "INCOME", "0", "1", "6"),
 
-                // Fixed expense categories
-                CategoryEntity(name = "Kos/Sewa", iconName = "housing", colorHex = "#F87171", type = "EXPENSE_FIXED", sortOrder = 0),
-                CategoryEntity(name = "Listrik", iconName = "electricity", colorHex = "#FBBF24", type = "EXPENSE_FIXED", sortOrder = 1),
-                CategoryEntity(name = "Internet", iconName = "internet", colorHex = "#38BDF8", type = "EXPENSE_FIXED", sortOrder = 2),
-                CategoryEntity(name = "Cicilan", iconName = "installment", colorHex = "#F472B6", type = "EXPENSE_FIXED", sortOrder = 3),
-                CategoryEntity(name = "Asuransi", iconName = "insurance", colorHex = "#818CF8", type = "EXPENSE_FIXED", sortOrder = 4),
-                CategoryEntity(name = "Langganan", iconName = "subscription", colorHex = "#A78BFA", type = "EXPENSE_FIXED", sortOrder = 5),
-                CategoryEntity(name = "Tagihan Rutin", iconName = "bill", colorHex = "#FB923C", type = "EXPENSE_FIXED", sortOrder = 6),
+                // Fixed expense categories (type = EXPENSE_FIXED)
+                arrayOf("Kos/Sewa", "housing", "#F87171", "EXPENSE_FIXED", "0", "1", "0"),
+                arrayOf("Listrik", "electricity", "#FBBF24", "EXPENSE_FIXED", "0", "1", "1"),
+                arrayOf("Internet", "internet", "#38BDF8", "EXPENSE_FIXED", "0", "1", "2"),
+                arrayOf("Cicilan", "installment", "#F472B6", "EXPENSE_FIXED", "0", "1", "3"),
+                arrayOf("Asuransi", "insurance", "#818CF8", "EXPENSE_FIXED", "0", "1", "4"),
+                arrayOf("Langganan", "subscription", "#A78BFA", "EXPENSE_FIXED", "0", "1", "5"),
+                arrayOf("Tagihan Rutin", "bill", "#FB923C", "EXPENSE_FIXED", "0", "1", "6"),
 
-                // Variable expense categories
-                CategoryEntity(name = "Makanan", iconName = "food", colorHex = "#FB923C", type = "EXPENSE_VARIABLE", sortOrder = 0),
-                CategoryEntity(name = "Transportasi", iconName = "transport", colorHex = "#38BDF8", type = "EXPENSE_VARIABLE", sortOrder = 1),
-                CategoryEntity(name = "Belanja", iconName = "shopping", colorHex = "#F472B6", type = "EXPENSE_VARIABLE", sortOrder = 2),
-                CategoryEntity(name = "Hiburan", iconName = "entertainment", colorHex = "#A78BFA", type = "EXPENSE_VARIABLE", sortOrder = 3),
-                CategoryEntity(name = "Nongkrong", iconName = "hangout", colorHex = "#FBBF24", type = "EXPENSE_VARIABLE", sortOrder = 4),
-                CategoryEntity(name = "Kesehatan", iconName = "health", colorHex = "#34D399", type = "EXPENSE_VARIABLE", sortOrder = 5),
-                CategoryEntity(name = "Pendidikan", iconName = "education", colorHex = "#818CF8", type = "EXPENSE_VARIABLE", sortOrder = 6),
-                CategoryEntity(name = "Teknologi", iconName = "technology", colorHex = "#6366F1", type = "EXPENSE_VARIABLE", sortOrder = 7),
-                CategoryEntity(name = "Lainnya", iconName = "other_expense", colorHex = "#94A3B8", type = "EXPENSE_VARIABLE", sortOrder = 8)
+                // Variable expense categories (type = EXPENSE_VARIABLE)
+                arrayOf("Makanan", "food", "#FB923C", "EXPENSE_VARIABLE", "0", "1", "0"),
+                arrayOf("Transportasi", "transport", "#38BDF8", "EXPENSE_VARIABLE", "0", "1", "1"),
+                arrayOf("Belanja", "shopping", "#F472B6", "EXPENSE_VARIABLE", "0", "1", "2"),
+                arrayOf("Hiburan", "entertainment", "#A78BFA", "EXPENSE_VARIABLE", "0", "1", "3"),
+                arrayOf("Nongkrong", "hangout", "#FBBF24", "EXPENSE_VARIABLE", "0", "1", "4"),
+                arrayOf("Kesehatan", "health", "#34D399", "EXPENSE_VARIABLE", "0", "1", "5"),
+                arrayOf("Pendidikan", "education", "#818CF8", "EXPENSE_VARIABLE", "0", "1", "6"),
+                arrayOf("Teknologi", "technology", "#6366F1", "EXPENSE_VARIABLE", "0", "1", "7"),
+                arrayOf("Lainnya", "other_expense", "#94A3B8", "EXPENSE_VARIABLE", "0", "1", "8")
             )
-            categoryDao.insertAll(categories)
+
+            db.beginTransaction()
+            try {
+                for (cat in categories) {
+                    db.execSQL(
+                        "INSERT INTO categories (name, iconName, colorHex, type, isCustom, isActive, sortOrder) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                        cat
+                    )
+                }
+                db.setTransactionSuccessful()
+            } finally {
+                db.endTransaction()
+            }
         }
     }
 }
