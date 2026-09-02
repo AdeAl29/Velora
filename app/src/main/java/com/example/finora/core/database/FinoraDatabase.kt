@@ -22,7 +22,7 @@ import kotlinx.coroutines.launch
         BillEntity::class,
         RecurringTransactionEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = true
 )
 abstract class FinoraDatabase : RoomDatabase() {
@@ -50,8 +50,13 @@ abstract class FinoraDatabase : RoomDatabase() {
                         super.onCreate(db)
                         insertDefaultCategories(db)
                     }
+
+                    override fun onDestructiveMigration(db: SupportSQLiteDatabase) {
+                        super.onDestructiveMigration(db)
+                        insertDefaultCategories(db)
+                    }
                 })
-                .fallbackToDestructiveMigration()
+                .fallbackToDestructiveMigration(dropAllTables = true)
                 .build()
         }
 
