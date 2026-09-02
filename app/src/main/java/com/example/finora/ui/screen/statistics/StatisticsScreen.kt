@@ -34,30 +34,26 @@ fun StatisticsScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Statistik & Analisis", style = MaterialTheme.typography.titleLarge) },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Rounded.ArrowBack, contentDescription = "Kembali")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
-            )
-        }
-    ) { paddingValues ->
-        if (uiState.isLoading) {
-            FinoraLoadingState(modifier = Modifier.padding(paddingValues).padding(20.dp))
-        } else {
-            LazyColumn(
-                modifier = modifier
-                    .fillMaxSize()
-                    .padding(paddingValues),
-                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(20.dp)
-            ) {
-                // Period Filters
+    if (uiState.isLoading) {
+        FinoraLoadingState(modifier = modifier.padding(20.dp))
+    } else {
+        LazyColumn(
+            modifier = modifier.fillMaxSize(),
+            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp)
+        ) {
+            // Screen Header
+            item {
+                Text(
+                    text = "Statistik & Analisis",
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    modifier = Modifier.padding(top = 4.dp, bottom = 2.dp)
+                )
+            }
+
+            // Period Filters
                 item {
                     LazyRow(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -304,7 +300,6 @@ fun StatisticsScreen(
             }
         }
     }
-}
 
 @Composable
 private fun StatMetricCard(

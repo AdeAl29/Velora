@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.finora.ui.theme.FinoraTextStyles
 
@@ -30,23 +31,24 @@ fun MoreScreen(
     onNavigateToSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Menu Lainnya", style = MaterialTheme.typography.titleLarge) },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // Screen Header
+        item {
+            Text(
+                text = "Menu Lainnya",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onBackground,
+                modifier = Modifier.padding(top = 4.dp, bottom = 2.dp)
             )
         }
-    ) { paddingValues ->
-        LazyColumn(
-            modifier = modifier
-                .fillMaxSize()
-                .padding(paddingValues),
-            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            item {
-                Text("Pengelolaan Finansial", style = FinoraTextStyles.sectionTitle, color = MaterialTheme.colorScheme.onBackground)
+
+        item {
+            Text("Pengelolaan Finansial", style = FinoraTextStyles.sectionTitle, color = MaterialTheme.colorScheme.onBackground)
                 Spacer(modifier = Modifier.height(10.dp))
 
                 Card(
@@ -151,7 +153,7 @@ fun MoreScreen(
             item { Spacer(modifier = Modifier.height(72.dp)) }
         }
     }
-}
+
 
 @Composable
 private fun MoreMenuItem(
