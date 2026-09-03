@@ -451,20 +451,71 @@ fun AddTransactionScreen(
             Spacer(modifier = Modifier.height(24.dp))
 
             // Date
+            var showDatePicker by remember { mutableStateOf(false) }
+
+            if (showDatePicker) {
+                val datePickerState = rememberDatePickerState(
+                    initialSelectedDateMillis = uiState.date
+                )
+                DatePickerDialog(
+                    onDismissRequest = { showDatePicker = false },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            datePickerState.selectedDateMillis?.let { utcMillis ->
+                                val localDate = java.time.Instant.ofEpochMilli(utcMillis)
+                                    .atZone(java.time.ZoneOffset.UTC)
+                                    .toLocalDate()
+                                val localEpoch = DateUtils.toEpochMillis(localDate)
+                                viewModel.setDate(localEpoch)
+                            }
+                            showDatePicker = false
+                        }) {
+                            Text("Pilih")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showDatePicker = false }) {
+                            Text("Batal")
+                        }
+                    }
+                ) {
+                    DatePicker(state = datePickerState)
+                }
+            }
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                OutlinedTextField(
-                    value = DateUtils.formatFullDate(uiState.date),
-                    onValueChange = {},
-                    readOnly = true,
-                    label = { Text("Tanggal") },
-                    leadingIcon = { Icon(Icons.Rounded.CalendarToday, null, modifier = Modifier.size(18.dp)) },
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(14.dp),
-                    singleLine = true
-                )
+                val isToday = DateUtils.isSameDay(uiState.date, DateUtils.today())
+                val displayDateText = if (isToday) "Hari ini (${DateUtils.formatShortDate(uiState.date)})" else DateUtils.formatFullDate(uiState.date)
+
+                Box(modifier = Modifier.weight(1f)) {
+                    OutlinedTextField(
+                        value = displayDateText,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Tanggal") },
+                        leadingIcon = { Icon(Icons.Rounded.CalendarToday, null, modifier = Modifier.size(18.dp)) },
+                        trailingIcon = {
+                            Text(
+                                text = "Ubah",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = FinoraPrimary,
+                                modifier = Modifier.padding(end = 12.dp)
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp),
+                        singleLine = true
+                    )
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .clip(RoundedCornerShape(14.dp))
+                            .clickable { showDatePicker = true }
+                    )
+                }
 
                 OutlinedTextField(
                     value = uiState.time,

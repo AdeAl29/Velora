@@ -23,7 +23,7 @@ data class BillListUiState(
 data class AddBillUiState(
     val name: String = "",
     val amount: String = "",
-    val dueDate: Int = 10,
+    val dueDate: Int = java.time.LocalDate.now().dayOfMonth,
     val selectedCategoryId: Long? = null,
     val selectedWalletId: Long? = null,
     val reminderDaysBefore: Int = 3,

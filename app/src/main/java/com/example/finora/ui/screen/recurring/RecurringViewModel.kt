@@ -121,6 +121,10 @@ class RecurringViewModel @Inject constructor(
         _addState.update { it.copy(frequency = freq) }
     }
 
+    fun setStartDate(date: Long) {
+        _addState.update { it.copy(startDate = date) }
+    }
+
     fun loadForEdit(id: Long) {
         viewModelScope.launch {
             val r = recurringRepository.getById(id) ?: return@launch
@@ -171,7 +175,14 @@ class RecurringViewModel @Inject constructor(
 
         _addState.update { it.copy(isLoading = true) }
         viewModelScope.launch {
-            val nextDate = LocalDate.now().plusMonths(1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+            val startLocalDate = DateUtils.toLocalDate(state.startDate)
+            val nextLocalDate = when (state.frequency) {
+                Frequency.DAILY -> startLocalDate.plusDays(1)
+                Frequency.WEEKLY -> startLocalDate.plusWeeks(1)
+                Frequency.MONTHLY -> startLocalDate.plusMonths(1)
+                Frequency.YEARLY -> startLocalDate.plusYears(1)
+            }
+            val nextDate = DateUtils.toEpochMillis(nextLocalDate)
             val rec = RecurringTransactionEntity(
                 id = state.editingId ?: 0L,
                 name = state.name.trim(),
