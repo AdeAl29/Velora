@@ -1,6 +1,6 @@
 package com.example.finora.ui.components
 
-import androidx.compose.animation.*
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ReceiptLong
+import androidx.compose.material.icons.automirrored.rounded.ReceiptLong
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
@@ -20,11 +22,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.BlurredEdgeTreatment
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -33,6 +32,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -45,30 +45,29 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.lerp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.util.lerp
 import com.example.finora.ui.theme.*
-import kotlin.math.roundToInt
+import kotlin.math.abs
+
+// Apple iOS signature smooth deceleration curve
+private val IosFluidEasing = CubicBezierEasing(0.22f, 1.0f, 0.36f, 1.0f)
 
 /**
- * iOS 26 "Liquid Glass" (Apple Music & Apple Photos style) Floating Bottom Navigation Bar.
+ * Ultra-Smooth 120Hz iOS 26 "Liquid Glass" Floating Bottom Navigation Bar.
  *
- * Key iOS Liquid Glass Mechanics Implemented:
- * 1. **Real-Time Backdrop Blur & Refraction Lens**:
- *    Samples the live screen [backdropGraphicsLayer] underneath the bar, blurs it (`26.dp`),
- *    and layers translucent optical glass tint, chromatic dispersion, and dual-rim specular catchlights.
- * 2. **Scroll-Down Minimize (`.tabBarMinimizeBehavior(.onScrollDown)`)**:
- *    When [isMinimized] is `true` (user scrolls down), the 5-tab capsule fluidly morphs into a
- *    compact floating Liquid Glass pill showing only the active tab. Tapping the minimized pill
- *    (or scrolling back up) immediately expands the full 5-tab bar.
- * 3. **Ambient Idle / Untouched State ([isIdle])**:
- *    When the user leaves the screen untouched for a few seconds, the glass enters an ambient
- *    ultra-translucent resting state (higher glass clarity, softened specular rim, compact height,
- *    and hidden inactive labels) until the user touches or scrolls again.
- * 4. **Interactive Liquid Lens Gesture**:
- *    Users can tap or drag horizontally across the capsule to slide the magnified liquid glass
- *    pill across tabs with tactile haptic feedback.
+ * Engineered for zero-jank, continuous fluid motion:
+ * 1. **Single Continuous Capsule Morph**:
+ *    Uses a single persistent [LiquidGlassSurface] that smoothly interpolates its width and height
+ *    between the full 5-tab bar and the compact minimized pill—zero cross-fade flicker or remounting.
+ * 2. **Dual-Spring Liquid Droplet Physics**:
+ *    The active indicator pill animates its left and right edges with asymmetric spring stiffnesses,
+ *    creating an organic water-droplet stretch in mid-flight and a gentle liquid cushion on arrival.
+ * 3. **RenderThread `graphicsLayer` Animations**:
+ *    Scale, alpha, translation, and idle label transitions run in the draw phase via `graphicsLayer`,
+ *    avoiding layout thrashing during scroll or idle transitions.
  */
 @Composable
 fun FinoraBottomNav(
@@ -96,8 +95,8 @@ fun FinoraBottomNav(
             ),
             IosTabItemData(
                 label = "Transaksi",
-                selectedIcon = Icons.Rounded.ReceiptLong,
-                unselectedIcon = Icons.Outlined.ReceiptLong
+                selectedIcon = Icons.AutoMirrored.Rounded.ReceiptLong,
+                unselectedIcon = Icons.AutoMirrored.Outlined.ReceiptLong
             ),
             IosTabItemData(
                 label = "Statistik",
@@ -120,139 +119,336 @@ fun FinoraBottomNav(
     val safeSelectedIndex = selectedIndex.coerceIn(0, items.lastIndex)
     val activeItem = items[safeSelectedIndex]
 
-    // Interactive horizontal drag state for liquid lens magnification
     var isDraggingCapsule by remember { mutableStateOf(false) }
 
-    // Ambient idle & scroll animations
-    val barScale by animateFloatAsState(
-        targetValue = when {
-            isDraggingCapsule -> 1.02f
-            isMinimized && isIdle -> 0.94f
-            isIdle -> 0.97f
-            else -> 1f
-        },
+    // Continuous 0f..1f progress for Minimize (Scroll Down) with silky critically-damped spring
+    val minimizeProgress by animateFloatAsState(
+        targetValue = if (isMinimized) 1f else 0f,
         animationSpec = spring(
-            dampingRatio = 0.72f,
-            stiffness = Spring.StiffnessLow
+            dampingRatio = 0.84f,
+            stiffness = 240f,
+            visibilityThreshold = 0.001f
         ),
-        label = "liquid_bar_scale"
+        label = "minimize_progress"
     )
 
-    val barVerticalOffsetDp by animateDpAsState(
-        targetValue = when {
-            isMinimized && isIdle -> 6.dp
-            isMinimized -> 3.dp
-            isIdle -> 4.dp
-            else -> 0.dp
-        },
+    // Continuous 0f..1f progress for Ambient Idle (Untouched)
+    val idleProgress by animateFloatAsState(
+        targetValue = if (isIdle && !isDraggingCapsule) 1f else 0f,
+        animationSpec = tween(
+            durationMillis = 520,
+            easing = IosFluidEasing
+        ),
+        label = "idle_progress"
+    )
+
+    // Interactive press/drag magnification progress
+    val dragProgress by animateFloatAsState(
+        targetValue = if (isDraggingCapsule) 1f else 0f,
         animationSpec = spring(
-            dampingRatio = 0.75f,
-            stiffness = Spring.StiffnessLow
+            dampingRatio = 0.68f,
+            stiffness = 380f
         ),
-        label = "liquid_bar_offset_y"
+        label = "drag_progress"
     )
 
-    val barAlpha by animateFloatAsState(
-        targetValue = when {
-            isMinimized && isIdle -> 0.78f
-            isIdle -> 0.88f
-            else -> 1f
-        },
-        animationSpec = tween(durationMillis = 420),
-        label = "liquid_bar_alpha"
-    )
-
-    val capsuleHeight by animateDpAsState(
-        targetValue = when {
-            isMinimized -> 50.dp
-            isIdle -> 54.dp
-            else -> 64.dp
-        },
-        animationSpec = spring(
-            dampingRatio = 0.74f,
-            stiffness = Spring.StiffnessMediumLow
-        ),
-        label = "liquid_capsule_height"
-    )
-
-    // Subtle ambient shimmer phase for liquid glass refraction
+    // Subtle continuous prismatic light drift
     val infiniteTransition = rememberInfiniteTransition(label = "liquid_glass_shimmer")
     val refractionShift by infiniteTransition.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 5500, easing = FastOutSlowInEasing),
+            animation = tween(durationMillis = 6500, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "refraction_shift"
     )
 
-    Box(
+    BoxWithConstraints(
         modifier = modifier
             .fillMaxWidth()
-            .offset {
-                IntOffset(0, with(density) { barVerticalOffsetDp.roundToPx() })
+            .navigationBarsPadding()
+            .padding(horizontal = 14.dp, vertical = 10.dp)
+            .graphicsLayer {
+                val targetScale = lerp(
+                    start = lerp(1f, 0.968f, idleProgress),
+                    stop = lerp(0.985f, 0.945f, idleProgress),
+                    fraction = minimizeProgress
+                ) + (0.022f * dragProgress)
+
+                scaleX = targetScale
+                scaleY = targetScale
+                translationY = (lerp(0f, 3.5f, idleProgress) + lerp(0f, 2.5f, minimizeProgress)).dp.toPx()
+                alpha = lerp(
+                    start = lerp(1f, 0.90f, idleProgress),
+                    stop = lerp(0.96f, 0.80f, idleProgress),
+                    fraction = minimizeProgress
+                )
             }
-            .scale(barScale)
-            .alpha(barAlpha)
     ) {
+        val totalAvailableWidth = maxWidth
+        val spacing = 10.dp
+
+        // Smoothly interpolate (+) button size from 60.dp -> 50.dp
+        val addButtonSize = lerp(
+            start = lerp(60.dp, 54.dp, idleProgress),
+            stop = 50.dp,
+            fraction = minimizeProgress
+        )
+
+        // Smoothly interpolate main capsule width & height (Single continuous capsule morph!)
+        val expandedCapsuleWidth = (totalAvailableWidth - addButtonSize - spacing).coerceAtLeast(160.dp)
+        val minimizedCapsuleWidth = 158.dp
+        val currentCapsuleWidth = lerp(expandedCapsuleWidth, minimizedCapsuleWidth, minimizeProgress)
+
+        val currentCapsuleHeight = lerp(
+            start = lerp(64.dp, 55.dp, idleProgress),
+            stop = 50.dp,
+            fraction = minimizeProgress
+        )
+
+        val capsuleShape = RoundedCornerShape(34.dp)
+
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .navigationBarsPadding()
-                .padding(horizontal = 14.dp, vertical = 10.dp),
+            modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            val capsuleShape = RoundedCornerShape(34.dp)
+            // 1. Single Continuous iOS Liquid Glass Capsule (Never unmounts between Expanded & Minimized!)
+            LiquidGlassSurface(
+                shape = capsuleShape,
+                isDark = isDark,
+                idleProgress = idleProgress,
+                highlightProgress = dragProgress,
+                refractionShift = refractionShift,
+                backdropGraphicsLayer = backdropGraphicsLayer,
+                rootOffsetInWindow = rootOffsetInWindow,
+                modifier = Modifier
+                    .width(currentCapsuleWidth)
+                    .height(currentCapsuleHeight)
+            ) {
+                val innerPadding = 5.dp
+                val innerWidth = (currentCapsuleWidth - innerPadding * 2).coerceAtLeast(100.dp)
+                val tabCount = items.size
+                val expandedTabWidth = ((expandedCapsuleWidth - innerPadding * 2) / tabCount).coerceAtLeast(40.dp)
 
-            // 1. iOS Liquid Glass Tab Capsule (Morphs between Full 5-Tab Bar and Minimized Pill)
-            AnimatedContent(
-                targetState = isMinimized,
-                transitionSpec = {
-                    (fadeIn(animationSpec = tween(220)) +
-                        scaleIn(
-                            initialScale = 0.86f,
-                            animationSpec = spring(
-                                dampingRatio = 0.72f,
-                                stiffness = Spring.StiffnessMediumLow
+                // Target left & right edges for the active Liquid Glass Pill in Expanded mode
+                val targetPillLeftExpanded = expandedTabWidth * safeSelectedIndex
+                val targetPillRightExpanded = targetPillLeftExpanded + expandedTabWidth
+
+                // Dual-spring physics: leading & trailing edges move with slightly different stiffness
+                // so the pill organically stretches like a water droplet while sliding between tabs!
+                var previousTabIndex by remember { mutableIntStateOf(safeSelectedIndex) }
+                val isMovingRight = safeSelectedIndex >= previousTabIndex
+                SideEffect {
+                    if (previousTabIndex != safeSelectedIndex) {
+                        previousTabIndex = safeSelectedIndex
+                    }
+                }
+
+                val leftEdgeSpring = if (isMovingRight) {
+                    // Trailing edge when moving right (softer stiffness -> stretches pill)
+                    spring<Dp>(dampingRatio = 0.80f, stiffness = 230f)
+                } else {
+                    // Leading edge when moving left (snappier stiffness)
+                    spring<Dp>(dampingRatio = 0.80f, stiffness = 360f)
+                }
+
+                val rightEdgeSpring = if (isMovingRight) {
+                    // Leading edge when moving right (snappier stiffness)
+                    spring<Dp>(dampingRatio = 0.80f, stiffness = 360f)
+                } else {
+                    // Trailing edge when moving left (softer stiffness -> stretches pill)
+                    spring<Dp>(dampingRatio = 0.80f, stiffness = 230f)
+                }
+
+                val animatedPillLeftExpanded by animateDpAsState(
+                    targetValue = targetPillLeftExpanded,
+                    animationSpec = leftEdgeSpring,
+                    label = "pill_left_edge"
+                )
+                val animatedPillRightExpanded by animateDpAsState(
+                    targetValue = targetPillRightExpanded,
+                    animationSpec = rightEdgeSpring,
+                    label = "pill_right_edge"
+                )
+
+                // As minimizeProgress goes 0f -> 1f, the active liquid pill smoothly glides to fill the compact pill!
+                val pillLeft = lerp(animatedPillLeftExpanded, 0.dp, minimizeProgress)
+                val pillRight = lerp(animatedPillRightExpanded, innerWidth, minimizeProgress)
+                val pillWidth = (pillRight - pillLeft).coerceAtLeast(36.dp)
+
+                // Calculate how much the droplet is currently stretched in mid-flight (0f..1f)
+                val stretchRatio = with(density) {
+                    val naturalW = expandedTabWidth.toPx().coerceAtLeast(1f)
+                    val currentW = (animatedPillRightExpanded - animatedPillLeftExpanded).toPx()
+                    ((abs(currentW - naturalW) / naturalW) * 1.4f).coerceIn(0f, 1f)
+                }
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding)
+                        .pointerInput(isMinimized, items.size) {
+                            if (!isMinimized) {
+                                detectHorizontalDragGestures(
+                                    onDragStart = { isDraggingCapsule = true },
+                                    onDragEnd = { isDraggingCapsule = false },
+                                    onDragCancel = { isDraggingCapsule = false },
+                                    onHorizontalDrag = { change, _ ->
+                                        change.consume()
+                                        val widthPx = size.width.toFloat().coerceAtLeast(1f)
+                                        val xPos = change.position.x.coerceIn(0f, widthPx - 1f)
+                                        val targetIndex = ((xPos / widthPx) * items.size)
+                                            .toInt()
+                                            .coerceIn(0, items.lastIndex)
+                                        if (targetIndex != selectedIndex) {
+                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                            onItemSelected(targetIndex)
+                                        }
+                                    }
+                                )
+                            }
+                        }
+                ) {
+                    // Shared Liquid Droplet Active Pill (Morphs seamlessly between tab slot & compact capsule!)
+                    val pillShape = RoundedCornerShape(28.dp)
+                    val activePillBrush = if (isDark) {
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.White.copy(alpha = lerp(0.24f, 0.14f, idleProgress)),
+                                FinoraPrimary.copy(alpha = lerp(0.36f, 0.22f, idleProgress)),
+                                FinoraSecondary.copy(alpha = lerp(0.24f, 0.14f, idleProgress))
                             )
-                        ))
-                        .togetherWith(
-                            fadeOut(animationSpec = tween(150)) +
-                                scaleOut(targetScale = 0.88f, animationSpec = tween(160))
                         )
-                        .using(
-                            SizeTransform(
-                                clip = false,
-                                sizeAnimationSpec = { _, _ ->
-                                    spring(
-                                        dampingRatio = 0.74f,
-                                        stiffness = Spring.StiffnessMediumLow
-                                    )
-                                }
+                    } else {
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.White.copy(alpha = lerp(0.90f, 0.68f, idleProgress)),
+                                FinoraPrimary.copy(alpha = lerp(0.20f, 0.12f, idleProgress)),
+                                FinoraSecondary.copy(alpha = lerp(0.14f, 0.08f, idleProgress))
                             )
                         )
-                },
-                modifier = Modifier.weight(1f, fill = !isMinimized),
-                label = "ios_liquid_glass_morph"
-            ) { minimized ->
-                if (minimized) {
-                    // MINIMIZED STATE (Apple Music / Photos onScrollDown compact pill)
-                    LiquidGlassSurface(
-                        shape = capsuleShape,
-                        isDark = isDark,
-                        isIdle = isIdle,
-                        isHighlighted = false,
-                        refractionShift = refractionShift,
-                        backdropGraphicsLayer = backdropGraphicsLayer,
-                        rootOffsetInWindow = rootOffsetInWindow,
+                    }
+
+                    val activePillBorderBrush = if (isDark) {
+                        Brush.linearGradient(
+                            colors = listOf(
+                                Color.White.copy(alpha = 0.58f),
+                                FinoraPrimaryLight.copy(alpha = 0.42f),
+                                Color.White.copy(alpha = 0.14f)
+                            )
+                        )
+                    } else {
+                        Brush.linearGradient(
+                            colors = listOf(
+                                Color.White.copy(alpha = 0.98f),
+                                FinoraPrimary.copy(alpha = 0.34f),
+                                Color.White.copy(alpha = 0.68f)
+                            )
+                        )
+                    }
+
+                    Box(
                         modifier = Modifier
-                            .height(capsuleHeight)
-                            .wrapContentWidth()
+                            .offset(x = pillLeft)
+                            .width(pillWidth)
+                            .fillMaxHeight()
+                            .graphicsLayer {
+                                // Subtle vertical squish during rapid horizontal droplet stretch + lens swell on drag
+                                val dropletScaleY = 1f - (0.045f * stretchRatio) + (0.055f * dragProgress)
+                                val dropletScaleX = 1f + (0.06f * dragProgress)
+                                scaleX = dropletScaleX
+                                scaleY = dropletScaleY
+                            }
+                            .clip(pillShape)
+                            .background(brush = activePillBrush)
+                            .border(
+                                width = 1.dp,
+                                brush = activePillBorderBrush,
+                                shape = pillShape
+                            )
                     ) {
+                        Canvas(modifier = Modifier.fillMaxSize()) {
+                            // Top curved liquid lens specular reflection
+                            drawRoundRect(
+                                brush = Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color.White.copy(alpha = if (isDark) 0.28f else 0.65f),
+                                        Color.Transparent
+                                    ),
+                                    startY = 0f,
+                                    endY = size.height * 0.48f
+                                ),
+                                cornerRadius = CornerRadius(size.height / 2f, size.height / 2f)
+                            )
+                            // Bottom chromatic dispersion glow
+                            drawCircle(
+                                brush = Brush.radialGradient(
+                                    colors = listOf(
+                                        FinoraPrimaryLight.copy(alpha = if (isDark) 0.28f else 0.18f),
+                                        Color.Transparent
+                                    ),
+                                    center = Offset(size.width / 2f, size.height * 0.85f),
+                                    radius = size.width * 0.65f
+                                )
+                            )
+                        }
+                    }
+
+                    // Layer A: Full 5-Tab Row (Smoothly fades & compresses as minimizeProgress -> 1f)
+                    if (minimizeProgress < 0.98f) {
+                        val tabsAlpha = (1f - (minimizeProgress * 1.45f)).coerceIn(0f, 1f)
                         Row(
                             modifier = Modifier
+                                .fillMaxSize()
+                                .graphicsLayer {
+                                    alpha = tabsAlpha
+                                    val s = lerp(1f, 0.90f, minimizeProgress)
+                                    scaleX = s
+                                    scaleY = s
+                                },
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            items.forEachIndexed { index, item ->
+                                val isSelected = safeSelectedIndex == index
+                                IosBottomTabItem(
+                                    item = item,
+                                    isSelected = isSelected,
+                                    idleProgress = idleProgress,
+                                    isDark = isDark,
+                                    onClick = {
+                                        if (isMinimized) {
+                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                            onExpandRequest()
+                                        } else if (selectedIndex != index) {
+                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                            onItemSelected(index)
+                                        } else {
+                                            onExpandRequest()
+                                        }
+                                    },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxHeight()
+                                )
+                            }
+                        }
+                    }
+
+                    // Layer B: Minimized Compact Pill Content (Smoothly blooms in as minimizeProgress -> 1f)
+                    if (minimizeProgress > 0.02f) {
+                        val compactAlpha = ((minimizeProgress - 0.22f) / 0.78f).coerceIn(0f, 1f)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .graphicsLayer {
+                                    alpha = compactAlpha
+                                    val s = lerp(0.88f, 1f, minimizeProgress)
+                                    scaleX = s
+                                    scaleY = s
+                                }
+                                .clip(pillShape)
                                 .clickable(
                                     interactionSource = remember { MutableInteractionSource() },
                                     indication = null
@@ -260,239 +456,45 @@ fun FinoraBottomNav(
                                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                     onExpandRequest()
                                 }
-                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                                .padding(horizontal = 12.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            // Active tab glowing droplet badge
-                            Box(
-                                modifier = Modifier
-                                    .size(32.dp)
-                                    .clip(CircleShape)
-                                    .background(
-                                        brush = Brush.linearGradient(
-                                            colors = listOf(
-                                                FinoraPrimary.copy(alpha = if (isDark) 0.42f else 0.22f),
-                                                FinoraSecondary.copy(alpha = if (isDark) 0.28f else 0.14f)
-                                            )
-                                        )
-                                    )
-                                    .border(
-                                        width = 0.8.dp,
-                                        color = Color.White.copy(alpha = if (isDark) 0.35f else 0.75f),
-                                        shape = CircleShape
-                                    ),
-                                contentAlignment = Alignment.Center
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 Icon(
                                     imageVector = activeItem.selectedIcon,
                                     contentDescription = activeItem.label,
                                     tint = if (isDark) FinoraPrimaryLight else FinoraPrimary,
-                                    modifier = Modifier.size(18.dp)
+                                    modifier = Modifier.size(19.dp)
+                                )
+                                Text(
+                                    text = activeItem.label,
+                                    fontSize = 12.5.sp,
+                                    fontFamily = FinoraFontFamily,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isDark) Color.White else Color(0xFF0F172A),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
 
-                            Text(
-                                text = activeItem.label,
-                                fontSize = 13.sp,
-                                fontFamily = FinoraFontFamily,
-                                fontWeight = FontWeight.Bold,
-                                color = if (isDark) Color.White else Color(0xFF0F172A),
-                                maxLines = 1
-                            )
-
-                            // Mini pill dots indicator showing it can be expanded
+                            // 3 liquid micro-dots indicating tap-to-expand
                             Row(
-                                horizontalArrangement = Arrangement.spacedBy(3.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(start = 2.dp)
+                                horizontalArrangement = Arrangement.spacedBy(2.5.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
                                 repeat(3) { dotIndex ->
                                     Box(
                                         modifier = Modifier
-                                            .size(if (dotIndex == 1) 4.5.dp else 3.5.dp)
+                                            .size(if (dotIndex == 1) 4.dp else 3.dp)
                                             .clip(CircleShape)
                                             .background(
-                                                if (isDark) Color.White.copy(alpha = 0.45f)
-                                                else Color(0xFF475569).copy(alpha = 0.45f)
+                                                if (isDark) Color.White.copy(alpha = 0.55f)
+                                                else Color(0xFF334155).copy(alpha = 0.50f)
                                             )
-                                    )
-                                }
-                            }
-                        }
-                    }
-                } else {
-                    // EXPANDED FULL 5-TAB LIQUID GLASS CAPSULE
-                    LiquidGlassSurface(
-                        shape = capsuleShape,
-                        isDark = isDark,
-                        isIdle = isIdle,
-                        isHighlighted = isDraggingCapsule,
-                        refractionShift = refractionShift,
-                        backdropGraphicsLayer = backdropGraphicsLayer,
-                        rootOffsetInWindow = rootOffsetInWindow,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(capsuleHeight)
-                    ) {
-                        BoxWithConstraints(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(horizontal = 5.dp, vertical = 5.dp)
-                                .pointerInput(items.size) {
-                                    detectHorizontalDragGestures(
-                                        onDragStart = {
-                                            isDraggingCapsule = true
-                                        },
-                                        onDragEnd = {
-                                            isDraggingCapsule = false
-                                        },
-                                        onDragCancel = {
-                                            isDraggingCapsule = false
-                                        },
-                                        onHorizontalDrag = { change, _ ->
-                                            change.consume()
-                                            val widthPx = size.width.toFloat().coerceAtLeast(1f)
-                                            val xPos = change.position.x.coerceIn(0f, widthPx - 1f)
-                                            val targetIndex = ((xPos / widthPx) * items.size)
-                                                .toInt()
-                                                .coerceIn(0, items.lastIndex)
-                                            if (targetIndex != selectedIndex) {
-                                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                                onItemSelected(targetIndex)
-                                            }
-                                        }
-                                    )
-                                }
-                        ) {
-                            val tabCount = items.size
-                            val tabWidth = maxWidth / tabCount
-
-                            // Fluid spring-animated sliding active Liquid Lens pill offset
-                            val indicatorOffset by animateDpAsState(
-                                targetValue = tabWidth * safeSelectedIndex,
-                                animationSpec = spring(
-                                    dampingRatio = 0.72f,
-                                    stiffness = Spring.StiffnessMediumLow
-                                ),
-                                label = "ios_liquid_sliding_pill"
-                            )
-
-                            // Liquid Lens magnification when pressed or dragged
-                            val lensScaleX by animateFloatAsState(
-                                targetValue = if (isDraggingCapsule) 1.08f else 1.0f,
-                                animationSpec = spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMedium),
-                                label = "lens_scale_x"
-                            )
-                            val lensScaleY by animateFloatAsState(
-                                targetValue = if (isDraggingCapsule) 1.06f else 1.0f,
-                                animationSpec = spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMedium),
-                                label = "lens_scale_y"
-                            )
-
-                            // Sliding Active Liquid Glass Pill (Droplet Lens)
-                            val pillShape = RoundedCornerShape(28.dp)
-                            val activePillBrush = if (isDark) {
-                                Brush.verticalGradient(
-                                    colors = listOf(
-                                        Color.White.copy(alpha = if (isIdle) 0.14f else 0.22f),
-                                        FinoraPrimary.copy(alpha = if (isIdle) 0.22f else 0.34f),
-                                        FinoraSecondary.copy(alpha = if (isIdle) 0.14f else 0.22f)
-                                    )
-                                )
-                            } else {
-                                Brush.verticalGradient(
-                                    colors = listOf(
-                                        Color.White.copy(alpha = if (isIdle) 0.65f else 0.88f),
-                                        FinoraPrimary.copy(alpha = if (isIdle) 0.12f else 0.20f),
-                                        FinoraSecondary.copy(alpha = if (isIdle) 0.08f else 0.14f)
-                                    )
-                                )
-                            }
-
-                            val activePillBorderBrush = if (isDark) {
-                                Brush.linearGradient(
-                                    colors = listOf(
-                                        Color.White.copy(alpha = 0.55f),
-                                        FinoraPrimaryLight.copy(alpha = 0.40f),
-                                        Color.White.copy(alpha = 0.12f)
-                                    )
-                                )
-                            } else {
-                                Brush.linearGradient(
-                                    colors = listOf(
-                                        Color.White.copy(alpha = 0.98f),
-                                        FinoraPrimary.copy(alpha = 0.32f),
-                                        Color.White.copy(alpha = 0.65f)
-                                    )
-                                )
-                            }
-
-                            Box(
-                                modifier = Modifier
-                                    .offset(x = indicatorOffset)
-                                    .width(tabWidth)
-                                    .fillMaxHeight()
-                                    .scale(scaleX = lensScaleX, scaleY = lensScaleY)
-                                    .clip(pillShape)
-                                    .background(brush = activePillBrush)
-                                    .border(
-                                        width = 1.dp,
-                                        brush = activePillBorderBrush,
-                                        shape = pillShape
-                                    )
-                            ) {
-                                // Top curved liquid lens specular reflection inside the active pill
-                                Canvas(modifier = Modifier.fillMaxSize()) {
-                                    // Top gloss arc
-                                    drawRoundRect(
-                                        brush = Brush.verticalGradient(
-                                            colors = listOf(
-                                                Color.White.copy(alpha = if (isDark) 0.28f else 0.65f),
-                                                Color.Transparent
-                                            ),
-                                            startY = 0f,
-                                            endY = size.height * 0.48f
-                                        ),
-                                        cornerRadius = CornerRadius(size.height / 2f, size.height / 2f)
-                                    )
-                                    // Bottom chromatic dispersion glow
-                                    drawCircle(
-                                        brush = Brush.radialGradient(
-                                            colors = listOf(
-                                                FinoraPrimaryLight.copy(alpha = if (isDark) 0.26f else 0.18f),
-                                                Color.Transparent
-                                            ),
-                                            center = Offset(size.width / 2f, size.height * 0.85f),
-                                            radius = size.width * 0.65f
-                                        )
-                                    )
-                                }
-                            }
-
-                            // 5 Tab Items Row
-                            Row(
-                                modifier = Modifier.fillMaxSize(),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                items.forEachIndexed { index, item ->
-                                    val isSelected = safeSelectedIndex == index
-                                    IosBottomTabItem(
-                                        item = item,
-                                        isSelected = isSelected,
-                                        isIdle = isIdle,
-                                        isDark = isDark,
-                                        onClick = {
-                                            if (selectedIndex != index) {
-                                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                                onItemSelected(index)
-                                            } else {
-                                                onExpandRequest()
-                                            }
-                                        },
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .fillMaxHeight()
                                     )
                                 }
                             }
@@ -501,14 +503,12 @@ fun FinoraBottomNav(
                 }
             }
 
-            Spacer(modifier = Modifier.width(10.dp))
-
             // 2. Detached iOS Liquid Glass Circular Action Button (+)
             IosFloatingAddButton(
+                buttonSize = addButtonSize,
                 isExpanded = isAddSheetOpen,
-                isMinimized = isMinimized,
-                isIdle = isIdle,
-                isDark = isDark,
+                minimizeProgress = minimizeProgress,
+                idleProgress = idleProgress,
                 backdropGraphicsLayer = backdropGraphicsLayer,
                 rootOffsetInWindow = rootOffsetInWindow,
                 onClick = onAddClick
@@ -518,16 +518,15 @@ fun FinoraBottomNav(
 }
 
 /**
- * Reusable iOS 26 Liquid Glass Container.
- * Renders real-time blurred background from [backdropGraphicsLayer] with translucent glass tint,
- * chromatic edge dispersion, and dual-rim specular catchlights.
+ * Reusable iOS 26 Liquid Glass Container driven by continuous [idleProgress] & [highlightProgress]
+ * so zero state snapping occurs during transitions.
  */
 @Composable
 private fun LiquidGlassSurface(
     shape: Shape,
     isDark: Boolean,
-    isIdle: Boolean,
-    isHighlighted: Boolean,
+    idleProgress: Float,
+    highlightProgress: Float,
     refractionShift: Float,
     backdropGraphicsLayer: GraphicsLayer?,
     rootOffsetInWindow: Offset,
@@ -536,39 +535,28 @@ private fun LiquidGlassSurface(
 ) {
     var surfaceOffsetInWindow by remember { mutableStateOf(Offset.Zero) }
 
-    // Translucent glass base alpha: becomes even clearer when untouched (isIdle)
-    val baseGlassColor by animateColorAsState(
-        targetValue = when {
-            isDark && isIdle -> Color(0xFF0F172A).copy(alpha = 0.36f)
-            isDark && isHighlighted -> Color(0xFF1E293B).copy(alpha = 0.60f)
-            isDark -> Color(0xFF0F172A).copy(alpha = 0.50f)
-            !isDark && isIdle -> Color(0xFFFFFFFF).copy(alpha = 0.42f)
-            !isDark && isHighlighted -> Color(0xFFFFFFFF).copy(alpha = 0.68f)
-            else -> Color(0xFFFFFFFF).copy(alpha = 0.55f)
-        },
-        animationSpec = tween(durationMillis = 350),
-        label = "glass_base_tint"
-    )
+    val baseAlpha = if (isDark) {
+        lerp(0.50f, 0.35f, idleProgress) + (0.10f * highlightProgress)
+    } else {
+        lerp(0.56f, 0.40f, idleProgress) + (0.12f * highlightProgress)
+    }
 
-    val borderAlphaMultiplier by animateFloatAsState(
-        targetValue = when {
-            isHighlighted -> 1.25f
-            isIdle -> 0.55f
-            else -> 1f
-        },
-        animationSpec = tween(durationMillis = 350),
-        label = "glass_border_alpha"
-    )
+    val baseGlassColor = if (isDark) {
+        Color(0xFF0F172A).copy(alpha = baseAlpha.coerceIn(0.25f, 0.80f))
+    } else {
+        Color(0xFFFFFFFF).copy(alpha = baseAlpha.coerceIn(0.30f, 0.85f))
+    }
 
-    // Dual-rim specular catchlights (top-left bright reflection + bottom-right glass refraction rim)
+    val borderAlphaMultiplier = lerp(1f, 0.52f, idleProgress) + (0.25f * highlightProgress)
+
     val specularBorderBrush = if (isDark) {
         Brush.linearGradient(
             colors = listOf(
-                Color.White.copy(alpha = (0.48f * borderAlphaMultiplier).coerceAtMost(0.95f)),
-                FinoraPrimaryLight.copy(alpha = (0.28f * borderAlphaMultiplier).coerceAtMost(0.8f)),
-                Color.White.copy(alpha = (0.08f * borderAlphaMultiplier).coerceAtMost(0.5f)),
-                FinoraSecondary.copy(alpha = (0.24f * borderAlphaMultiplier).coerceAtMost(0.8f)),
-                Color.White.copy(alpha = (0.35f * borderAlphaMultiplier).coerceAtMost(0.9f))
+                Color.White.copy(alpha = (0.48f * borderAlphaMultiplier).coerceIn(0f, 0.95f)),
+                FinoraPrimaryLight.copy(alpha = (0.28f * borderAlphaMultiplier).coerceIn(0f, 0.85f)),
+                Color.White.copy(alpha = (0.08f * borderAlphaMultiplier).coerceIn(0f, 0.50f)),
+                FinoraSecondary.copy(alpha = (0.24f * borderAlphaMultiplier).coerceIn(0f, 0.85f)),
+                Color.White.copy(alpha = (0.36f * borderAlphaMultiplier).coerceIn(0f, 0.90f))
             ),
             start = Offset(0f, 0f),
             end = Offset(900f, 260f)
@@ -576,10 +564,10 @@ private fun LiquidGlassSurface(
     } else {
         Brush.linearGradient(
             colors = listOf(
-                Color.White.copy(alpha = (0.95f * borderAlphaMultiplier).coerceAtMost(1f)),
-                FinoraPrimaryLight.copy(alpha = (0.35f * borderAlphaMultiplier).coerceAtMost(0.85f)),
-                Color(0xFFCBD5E1).copy(alpha = (0.45f * borderAlphaMultiplier).coerceAtMost(0.85f)),
-                Color.White.copy(alpha = (0.90f * borderAlphaMultiplier).coerceAtMost(1f))
+                Color.White.copy(alpha = (0.95f * borderAlphaMultiplier).coerceIn(0f, 1f)),
+                FinoraPrimaryLight.copy(alpha = (0.35f * borderAlphaMultiplier).coerceIn(0f, 0.85f)),
+                Color(0xFFCBD5E1).copy(alpha = (0.45f * borderAlphaMultiplier).coerceIn(0f, 0.85f)),
+                Color.White.copy(alpha = (0.90f * borderAlphaMultiplier).coerceIn(0f, 1f))
             ),
             start = Offset(0f, 0f),
             end = Offset(900f, 260f)
@@ -589,17 +577,22 @@ private fun LiquidGlassSurface(
     Box(
         modifier = modifier
             .onGloballyPositioned { coords ->
-                surfaceOffsetInWindow = coords.positionInWindow()
+                val newPos = coords.positionInWindow()
+                if (abs(newPos.x - surfaceOffsetInWindow.x) > 0.5f ||
+                    abs(newPos.y - surfaceOffsetInWindow.y) > 0.5f
+                ) {
+                    surfaceOffsetInWindow = newPos
+                }
             }
             .shadow(
-                elevation = if (isIdle) 10.dp else if (isDark) 22.dp else 16.dp,
+                elevation = lerp(if (isDark) 22.dp else 16.dp, 10.dp, idleProgress),
                 shape = shape,
                 ambientColor = if (isDark) Color.Black.copy(alpha = 0.65f) else FinoraPrimary.copy(alpha = 0.20f),
                 spotColor = if (isDark) Color.Black.copy(alpha = 0.75f) else FinoraPrimary.copy(alpha = 0.25f)
             )
             .clip(shape)
     ) {
-        // Layer 1: Live Blurred Backdrop (Real Optical Refraction of content scrolling behind the glass)
+        // Layer 1: Live Blurred Backdrop (Real Optical Refraction)
         if (backdropGraphicsLayer != null) {
             val relativeOffset = surfaceOffsetInWindow - rootOffsetInWindow
             Canvas(
@@ -631,11 +624,12 @@ private fun LiquidGlassSurface(
             val w = size.width
             val h = size.height
 
-            // Top curved glass surface specular reflection
             drawRect(
                 brush = Brush.verticalGradient(
                     colors = listOf(
-                        Color.White.copy(alpha = if (isDark) 0.16f * borderAlphaMultiplier else 0.55f * borderAlphaMultiplier),
+                        Color.White.copy(
+                            alpha = (if (isDark) 0.16f else 0.55f) * borderAlphaMultiplier
+                        ),
                         Color.White.copy(alpha = if (isDark) 0.03f else 0.12f),
                         Color.Transparent
                     ),
@@ -644,13 +638,16 @@ private fun LiquidGlassSurface(
                 )
             )
 
-            // Moving liquid prismatic dispersion highlight
             val glowCenterX = w * (0.2f + 0.6f * refractionShift)
             drawCircle(
                 brush = Brush.radialGradient(
                     colors = listOf(
-                        FinoraPrimaryLight.copy(alpha = if (isDark) 0.12f * borderAlphaMultiplier else 0.10f * borderAlphaMultiplier),
-                        FinoraSecondary.copy(alpha = if (isDark) 0.06f * borderAlphaMultiplier else 0.05f * borderAlphaMultiplier),
+                        FinoraPrimaryLight.copy(
+                            alpha = (if (isDark) 0.12f else 0.10f) * borderAlphaMultiplier
+                        ),
+                        FinoraSecondary.copy(
+                            alpha = (if (isDark) 0.06f else 0.05f) * borderAlphaMultiplier
+                        ),
                         Color.Transparent
                     ),
                     center = Offset(glowCenterX, h * 0.5f),
@@ -658,12 +655,13 @@ private fun LiquidGlassSurface(
                 )
             )
 
-            // Bottom inner rim bounce light
             drawRect(
                 brush = Brush.verticalGradient(
                     colors = listOf(
                         Color.Transparent,
-                        Color.White.copy(alpha = if (isDark) 0.07f * borderAlphaMultiplier else 0.30f * borderAlphaMultiplier)
+                        Color.White.copy(
+                            alpha = (if (isDark) 0.07f else 0.30f) * borderAlphaMultiplier
+                        )
                     ),
                     startY = h * 0.72f,
                     endY = h
@@ -682,16 +680,18 @@ private fun LiquidGlassSurface(
                 )
         )
 
-        // Foreground Content
         content()
     }
 }
 
+/**
+ * Individual Tab Item with 120Hz `graphicsLayer` animations (no `AnimatedVisibility` layout jank).
+ */
 @Composable
 private fun IosBottomTabItem(
     item: IosTabItemData,
     isSelected: Boolean,
-    isIdle: Boolean,
+    idleProgress: Float,
     isDark: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -701,56 +701,55 @@ private fun IosBottomTabItem(
 
     val pressScale by animateFloatAsState(
         targetValue = when {
-            isPressed -> 0.86f
+            isPressed -> 0.85f
             isSelected -> 1.0f
             else -> 0.96f
         },
         animationSpec = spring(
-            dampingRatio = 0.58f,
-            stiffness = Spring.StiffnessMedium
+            dampingRatio = 0.64f,
+            stiffness = 400f
         ),
-        label = "ios_tab_scale"
+        label = "ios_tab_press_scale"
     )
 
-    val iconBounce by animateFloatAsState(
-        targetValue = when {
-            isSelected && !isIdle -> 1.12f
-            isSelected && isIdle -> 1.05f
-            else -> 1.0f
-        },
+    val selectionProgress by animateFloatAsState(
+        targetValue = if (isSelected) 1f else 0f,
         animationSpec = spring(
-            dampingRatio = 0.5f,
-            stiffness = Spring.StiffnessMediumLow
+            dampingRatio = 0.70f,
+            stiffness = 320f
         ),
-        label = "ios_icon_bounce"
+        label = "ios_tab_selection_progress"
     )
 
-    val activeColor = if (isDark) Color.White else FinoraPrimaryDark
+    // Smoothly keep label visible for selected tab, and smoothly fade/glide for inactive tabs when idle
+    val labelVisibility = lerp(1f - idleProgress, 1f, selectionProgress).coerceIn(0f, 1f)
+
+    val activeTextColor = if (isDark) Color.White else FinoraPrimaryDark
     val activeIconTint = if (isDark) FinoraPrimaryLight else FinoraPrimary
     val inactiveColor = if (isDark) {
-        Color(0xFFCBD5E1).copy(alpha = if (isIdle) 0.60f else 0.85f)
+        Color(0xFFCBD5E1).copy(alpha = lerp(0.85f, 0.58f, idleProgress))
     } else {
-        Color(0xFF334155).copy(alpha = if (isIdle) 0.65f else 0.88f)
+        Color(0xFF334155).copy(alpha = lerp(0.88f, 0.62f, idleProgress))
     }
 
     val animatedIconTint by animateColorAsState(
         targetValue = if (isSelected) activeIconTint else inactiveColor,
-        animationSpec = tween(durationMillis = 220),
+        animationSpec = tween(durationMillis = 260, easing = IosFluidEasing),
         label = "ios_tab_icon_color"
     )
 
     val animatedTextColor by animateColorAsState(
-        targetValue = if (isSelected) activeColor else inactiveColor,
-        animationSpec = tween(durationMillis = 220),
+        targetValue = if (isSelected) activeTextColor else inactiveColor,
+        animationSpec = tween(durationMillis = 260, easing = IosFluidEasing),
         label = "ios_tab_text_color"
     )
 
-    // In ambient idle mode, inactive tab labels gently hide so the glass bar looks ultra-clean
-    val showLabel = !isIdle || isSelected
-
     Column(
         modifier = modifier
-            .scale(pressScale)
+            .graphicsLayer {
+                scaleX = pressScale
+                scaleY = pressScale
+            }
             .clip(RoundedCornerShape(28.dp))
             .clickable(
                 interactionSource = interactionSource,
@@ -766,39 +765,45 @@ private fun IosBottomTabItem(
             contentDescription = item.label,
             tint = animatedIconTint,
             modifier = Modifier
-                .size(if (isIdle && !isSelected) 20.dp else 21.dp)
-                .scale(iconBounce)
+                .size(21.dp)
+                .graphicsLayer {
+                    val bounce = lerp(1f, 1.12f, selectionProgress)
+                    scaleX = bounce
+                    scaleY = bounce
+                    // Smoothly center the icon vertically as the inactive label fades out in idle mode
+                    translationY = lerp(5.dp.toPx(), 0f, labelVisibility)
+                }
         )
 
-        AnimatedVisibility(
-            visible = showLabel,
-            enter = fadeIn(tween(180)) + expandVertically(tween(200)),
-            exit = fadeOut(tween(150)) + shrinkVertically(tween(180))
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = item.label,
-                    fontSize = 10.sp,
-                    lineHeight = 11.sp,
-                    fontFamily = FinoraFontFamily,
-                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
-                    color = animatedTextColor,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    letterSpacing = (-0.15).sp
-                )
+        Spacer(modifier = Modifier.height(2.dp))
+
+        Text(
+            text = item.label,
+            fontSize = 10.sp,
+            lineHeight = 11.sp,
+            fontFamily = FinoraFontFamily,
+            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
+            color = animatedTextColor,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            letterSpacing = (-0.15).sp,
+            modifier = Modifier.graphicsLayer {
+                alpha = labelVisibility
+                val textScale = lerp(0.82f, 1f, labelVisibility)
+                scaleX = textScale
+                scaleY = textScale
+                translationY = lerp(4.dp.toPx(), 0f, labelVisibility)
             }
-        }
+        )
     }
 }
 
 @Composable
 fun IosFloatingAddButton(
+    buttonSize: Dp = 60.dp,
     isExpanded: Boolean = false,
-    isMinimized: Boolean = false,
-    isIdle: Boolean = false,
-    isDark: Boolean = true,
+    minimizeProgress: Float = 0f,
+    idleProgress: Float = 0f,
     backdropGraphicsLayer: GraphicsLayer? = null,
     rootOffsetInWindow: Offset = Offset.Zero,
     onClick: () -> Unit,
@@ -809,37 +814,35 @@ fun IosFloatingAddButton(
     val isPressed by interactionSource.collectIsPressedAsState()
     var buttonOffsetInWindow by remember { mutableStateOf(Offset.Zero) }
 
-    val buttonSize: Dp by animateDpAsState(
-        targetValue = when {
-            isMinimized -> 50.dp
-            isIdle -> 52.dp
-            else -> 60.dp
-        },
-        animationSpec = spring(dampingRatio = 0.72f, stiffness = Spring.StiffnessMediumLow),
-        label = "ios_add_size"
-    )
-
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.86f else 1f,
-        animationSpec = spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMedium),
+    val pressScale by animateFloatAsState(
+        targetValue = if (isPressed) 0.85f else 1f,
+        animationSpec = spring(dampingRatio = 0.60f, stiffness = 380f),
         label = "ios_add_scale"
     )
 
     val rotation by animateFloatAsState(
-        targetValue = if (isExpanded) 45f else 0f,
-        animationSpec = spring(dampingRatio = 0.65f, stiffness = Spring.StiffnessMedium),
+        targetValue = if (isExpanded) 135f else 0f,
+        animationSpec = spring(dampingRatio = 0.68f, stiffness = 260f),
         label = "ios_add_rotation"
     )
 
     Box(
         modifier = modifier
             .onGloballyPositioned { coords ->
-                buttonOffsetInWindow = coords.positionInWindow()
+                val newPos = coords.positionInWindow()
+                if (abs(newPos.x - buttonOffsetInWindow.x) > 0.5f ||
+                    abs(newPos.y - buttonOffsetInWindow.y) > 0.5f
+                ) {
+                    buttonOffsetInWindow = newPos
+                }
             }
-            .scale(scale)
+            .graphicsLayer {
+                scaleX = pressScale
+                scaleY = pressScale
+            }
             .size(buttonSize)
             .shadow(
-                elevation = if (isIdle) 10.dp else 18.dp,
+                elevation = lerp(18.dp, 10.dp, idleProgress),
                 shape = CircleShape,
                 ambientColor = FinoraPrimary.copy(alpha = 0.45f),
                 spotColor = FinoraPrimary.copy(alpha = 0.55f)
@@ -854,7 +857,6 @@ fun IosFloatingAddButton(
             },
         contentAlignment = Alignment.Center
     ) {
-        // Real-time blurred backdrop behind the circular Liquid Glass (+) button
         if (backdropGraphicsLayer != null) {
             val relativeOffset = buttonOffsetInWindow - rootOffsetInWindow
             Canvas(
@@ -868,22 +870,21 @@ fun IosFloatingAddButton(
             }
         }
 
-        // Translucent vibrant Liquid Glass tint for the (+) button
+        val tintAlpha = lerp(0.86f, 0.72f, idleProgress)
         Box(
             modifier = Modifier
                 .matchParentSize()
                 .background(
                     brush = Brush.linearGradient(
                         colors = listOf(
-                            FinoraPrimary.copy(alpha = if (isIdle) 0.72f else 0.86f),
-                            Color(0xFF3B82F6).copy(alpha = if (isIdle) 0.68f else 0.82f),
-                            FinoraSecondary.copy(alpha = if (isIdle) 0.72f else 0.86f)
+                            FinoraPrimary.copy(alpha = tintAlpha),
+                            Color(0xFF3B82F6).copy(alpha = tintAlpha - 0.04f),
+                            FinoraSecondary.copy(alpha = tintAlpha)
                         )
                     )
                 )
         )
 
-        // Liquid lens top highlight & rim border
         Canvas(modifier = Modifier.fillMaxSize()) {
             drawCircle(
                 brush = Brush.radialGradient(
@@ -898,9 +899,9 @@ fun IosFloatingAddButton(
             drawCircle(
                 brush = Brush.linearGradient(
                     colors = listOf(
-                        Color.White.copy(alpha = 0.75f),
-                        Color.White.copy(alpha = 0.15f),
-                        Color.White.copy(alpha = 0.45f)
+                        Color.White.copy(alpha = 0.78f),
+                        Color.White.copy(alpha = 0.16f),
+                        Color.White.copy(alpha = 0.48f)
                     )
                 ),
                 style = Stroke(width = 1.4.dp.toPx())
@@ -912,8 +913,10 @@ fun IosFloatingAddButton(
             contentDescription = "Catat Transaksi Cepat",
             tint = Color.White,
             modifier = Modifier
-                .size(if (isMinimized) 22.dp else 26.dp)
-                .rotate(rotation)
+                .size(lerp(26.dp, 22.dp, minimizeProgress))
+                .graphicsLayer {
+                    rotationZ = rotation
+                }
         )
     }
 }

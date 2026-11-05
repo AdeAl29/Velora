@@ -1,7 +1,9 @@
 package com.example.finora.ui.screen.main
 
+import android.os.SystemClock
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -11,6 +13,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.TrendingDown
+import androidx.compose.material.icons.automirrored.rounded.TrendingUp
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -46,6 +50,9 @@ import com.example.finora.ui.screen.transaction.TransactionListScreen
 import com.example.finora.ui.screen.transaction.TransactionListViewModel
 import com.example.finora.ui.theme.*
 import kotlinx.coroutines.delay
+import kotlin.math.abs
+
+private val IosDecelerateEasing = CubicBezierEasing(0.22f, 1.0f, 0.36f, 1.0f)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -68,12 +75,25 @@ fun MainDashboardScreen(
     var selectedTabIndex by rememberSaveable { mutableIntStateOf(0) }
     var showAddSheet by rememberSaveable { mutableStateOf(false) }
 
-    // iOS 26 Liquid Glass Dynamic States:
-    // 1. isBottomBarMinimized: shrinks into a compact active-tab pill when scrolling down
-    // 2. isBottomBarIdle: enters ultra-translucent ambient glass state when untouched for 3.5s
+    // iOS 26 Liquid Glass Dynamic States
     var isBottomBarMinimized by rememberSaveable { mutableStateOf(false) }
     var isBottomBarIdle by remember { mutableStateOf(false) }
     var interactionTick by remember { mutableLongStateOf(0L) }
+    var lastInteractionUptime by remember { mutableLongStateOf(0L) }
+
+    // Throttled interaction wakeup so 120Hz scrolling never triggers unnecessary recompositions
+    val notifyUserInteraction = remember {
+        {
+            if (isBottomBarIdle) {
+                isBottomBarIdle = false
+            }
+            val now = SystemClock.uptimeMillis()
+            if (now - lastInteractionUptime > 400L) {
+                lastInteractionUptime = now
+                interactionTick++
+            }
+        }
+    }
 
     // Real-time GraphicsLayer capturing content underneath for iOS Liquid Glass backdrop blur
     val backdropGraphicsLayer = rememberGraphicsLayer()
@@ -107,7 +127,7 @@ fun MainDashboardScreen(
             ): Offset {
                 val deltaY = consumed.y
                 if (deltaY != 0f) {
-                    interactionTick++
+                    notifyUserInteraction()
                 }
 
                 when {
@@ -115,7 +135,7 @@ fun MainDashboardScreen(
                     deltaY < -0.5f -> {
                         if (scrollDeltaAccumulator > 0f) scrollDeltaAccumulator = 0f
                         scrollDeltaAccumulator += deltaY
-                        if (scrollDeltaAccumulator < -28f && !isBottomBarMinimized) {
+                        if (scrollDeltaAccumulator < -34f && !isBottomBarMinimized) {
                             isBottomBarMinimized = true
                             scrollDeltaAccumulator = 0f
                         }
@@ -124,14 +144,16 @@ fun MainDashboardScreen(
                     deltaY > 0.5f -> {
                         if (scrollDeltaAccumulator < 0f) scrollDeltaAccumulator = 0f
                         scrollDeltaAccumulator += deltaY
-                        if (scrollDeltaAccumulator > 20f && isBottomBarMinimized) {
+                        if (scrollDeltaAccumulator > 22f && isBottomBarMinimized) {
                             isBottomBarMinimized = false
                             scrollDeltaAccumulator = 0f
                         }
                     }
                     // User pulled down while already at the very top of the list -> ensure expanded
                     available.y > 10f -> {
-                        isBottomBarMinimized = false
+                        if (isBottomBarMinimized) {
+                            isBottomBarMinimized = false
+                        }
                         scrollDeltaAccumulator = 0f
                     }
                 }
@@ -195,7 +217,7 @@ fun MainDashboardScreen(
                 Spacer(modifier = Modifier.height(4.dp))
 
                 QuickAddOption(
-                    icon = Icons.Rounded.TrendingDown,
+                    icon = Icons.AutoMirrored.Rounded.TrendingDown,
                     title = "Pengeluaran Baru",
                     subtitle = "Catat belanja, makanan, transportasi, atau struk AI",
                     color = FinoraExpense,
@@ -206,7 +228,7 @@ fun MainDashboardScreen(
                 )
 
                 QuickAddOption(
-                    icon = Icons.Rounded.TrendingUp,
+                    icon = Icons.AutoMirrored.Rounded.TrendingUp,
                     title = "Pemasukan Baru",
                     subtitle = "Catat gaji, bonus, proyek freelance, atau hadiah",
                     color = FinoraIncome,
@@ -262,10 +284,8 @@ fun MainDashboardScreen(
                 .nestedScroll(nestedScrollConnection)
                 .pointerInput(Unit) {
                     awaitEachGesture {
-                        // Observe initial pointer pass without consuming so all buttons/scrolls work normally
                         awaitPointerEvent(pass = PointerEventPass.Initial)
-                        isBottomBarIdle = false
-                        interactionTick++
+                        notifyUserInteraction()
                     }
                 }
         ) {
@@ -275,7 +295,12 @@ fun MainDashboardScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .onGloballyPositioned { coords ->
-                        rootOffsetInWindow = coords.positionInWindow()
+                        val pos = coords.positionInWindow()
+                        if (abs(pos.x - rootOffsetInWindow.x) > 0.5f ||
+                            abs(pos.y - rootOffsetInWindow.y) > 0.5f
+                        ) {
+                            rootOffsetInWindow = pos
+                        }
                     }
                     .drawWithContent {
                         backdropGraphicsLayer.record {
@@ -288,11 +313,23 @@ fun MainDashboardScreen(
                     targetState = selectedTabIndex,
                     transitionSpec = {
                         val direction = if (targetState > initialState) 1 else -1
-                        (fadeIn(animationSpec = tween(220)) +
-                            slideInHorizontally(animationSpec = tween(240)) { (it * 0.06f * direction).toInt() })
+                        (fadeIn(animationSpec = tween(280, easing = IosDecelerateEasing)) +
+                            scaleIn(
+                                initialScale = 0.985f,
+                                animationSpec = tween(300, easing = IosDecelerateEasing)
+                            ) +
+                            slideInHorizontally(
+                                animationSpec = tween(300, easing = IosDecelerateEasing)
+                            ) { (it * 0.045f * direction).toInt() })
                             .togetherWith(
-                                fadeOut(animationSpec = tween(160)) +
-                                    slideOutHorizontally(animationSpec = tween(200)) { (-it * 0.04f * direction).toInt() }
+                                fadeOut(animationSpec = tween(190, easing = IosDecelerateEasing)) +
+                                    scaleOut(
+                                        targetScale = 0.985f,
+                                        animationSpec = tween(210, easing = IosDecelerateEasing)
+                                    ) +
+                                    slideOutHorizontally(
+                                        animationSpec = tween(210, easing = IosDecelerateEasing)
+                                    ) { (-it * 0.035f * direction).toInt() }
                             )
                     },
                     label = "main_tab_transition",
@@ -358,12 +395,10 @@ fun MainDashboardScreen(
                 onItemSelected = {
                     selectedTabIndex = it
                     isBottomBarMinimized = false
-                    isBottomBarIdle = false
-                    interactionTick++
+                    notifyUserInteraction()
                 },
                 onAddClick = {
-                    isBottomBarIdle = false
-                    interactionTick++
+                    notifyUserInteraction()
                     showAddSheet = true
                 },
                 isAddSheetOpen = showAddSheet,
@@ -371,8 +406,7 @@ fun MainDashboardScreen(
                 isIdle = isBottomBarIdle,
                 onExpandRequest = {
                     isBottomBarMinimized = false
-                    isBottomBarIdle = false
-                    interactionTick++
+                    notifyUserInteraction()
                 },
                 backdropGraphicsLayer = backdropGraphicsLayer,
                 rootOffsetInWindow = rootOffsetInWindow,
