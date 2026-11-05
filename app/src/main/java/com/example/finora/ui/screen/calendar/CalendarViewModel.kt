@@ -47,6 +47,9 @@ class CalendarViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(CalendarUiState())
     val uiState: StateFlow<CalendarUiState> = _uiState.asStateFlow()
 
+    private var monthJob: kotlinx.coroutines.Job? = null
+    private var dayJob: kotlinx.coroutines.Job? = null
+
     init {
         loadMonthData(YearMonth.now(), LocalDate.now())
     }
@@ -70,7 +73,8 @@ class CalendarViewModel @Inject constructor(
         val startEpoch = month.atDay(1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
         val endEpoch = month.atEndOfMonth().atTime(23, 59, 59).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
 
-        viewModelScope.launch {
+        monthJob?.cancel()
+        monthJob = viewModelScope.launch {
             transactionRepository.observeByDateRange(startEpoch, endEpoch).collect { transactions ->
                 val today = LocalDate.now()
                 val daysList = (1..month.lengthOfMonth()).map { dayNum ->
@@ -112,7 +116,8 @@ class CalendarViewModel @Inject constructor(
         val dayStart = date.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
         val dayEnd = date.atTime(23, 59, 59).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
 
-        viewModelScope.launch {
+        dayJob?.cancel()
+        dayJob = viewModelScope.launch {
             transactionRepository.observeByDateRange(dayStart, dayEnd).collect { txs ->
                 val enriched = txs.map { tx ->
                     val cat = tx.categoryId?.let { categoryRepository.getById(it) }

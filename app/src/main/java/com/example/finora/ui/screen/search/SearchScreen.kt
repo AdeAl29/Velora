@@ -27,6 +27,8 @@ fun SearchScreen(
     onNavigateBack: () -> Unit,
     onNavigateToTransactionDetail: (Long) -> Unit,
     onNavigateToGoalDetail: (Long) -> Unit,
+    onNavigateToWallets: () -> Unit = {},
+    onNavigateToBills: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -152,7 +154,10 @@ fun SearchScreen(
                         items(uiState.wallets, key = { "wallet_${it.id}" }) { wallet ->
                             val color = getCategoryColor(wallet.colorHex)
                             Card(
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .clickable(onClick = onNavigateToWallets),
                                 shape = RoundedCornerShape(16.dp),
                                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                             ) {
@@ -170,7 +175,8 @@ fun SearchScreen(
                                         FinoraCategoryIcon(iconName = wallet.iconName, color = color, size = 22.dp)
                                     }
                                     Spacer(modifier = Modifier.width(14.dp))
-                                    Text(text = wallet.name, style = MaterialTheme.typography.titleMedium)
+                                    Text(text = wallet.name, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                                    Icon(Icons.Rounded.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
                         }
@@ -186,27 +192,13 @@ fun SearchScreen(
                             )
                         }
                         items(uiState.bills, key = { "bill_${it.id}" }) { bill ->
-                            Card(
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(16.dp),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(16.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = "${bill.dueDate}",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-                                    Spacer(modifier = Modifier.width(14.dp))
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(text = bill.name, style = MaterialTheme.typography.titleSmall)
-                                        Text(text = CurrencyFormatter.formatRupiah(bill.amount), style = MaterialTheme.typography.bodySmall)
-                                    }
-                                }
-                            }
+                            FinoraBillCard(
+                                name = bill.name,
+                                amount = bill.amount,
+                                dueDate = bill.dueDate,
+                                isPaid = bill.isPaid,
+                                onClick = onNavigateToBills
+                            )
                         }
                     }
 

@@ -33,9 +33,12 @@ class SearchViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(SearchResultUiState())
     val uiState: StateFlow<SearchResultUiState> = _uiState.asStateFlow()
 
+    private var searchJob: kotlinx.coroutines.Job? = null
+
     fun setQuery(query: String) {
         _uiState.update { it.copy(query = query) }
         if (query.isBlank()) {
+            searchJob?.cancel()
             _uiState.update {
                 it.copy(
                     transactions = emptyList(),
@@ -55,7 +58,8 @@ class SearchViewModel @Inject constructor(
     private fun performSearch(query: String) {
         _uiState.update { it.copy(isSearching = true, hasSearched = true) }
 
-        viewModelScope.launch {
+        searchJob?.cancel()
+        searchJob = viewModelScope.launch {
             combine(
                 transactionRepository.search(query),
                 categoryRepository.search(query),

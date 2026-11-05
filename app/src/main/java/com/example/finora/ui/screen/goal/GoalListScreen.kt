@@ -163,7 +163,7 @@ fun GoalListScreen(
                     }
                 }
 
-                item { Spacer(modifier = Modifier.height(72.dp)) }
+                item { Spacer(modifier = Modifier.height(100.dp)) }
             }
         }
     }

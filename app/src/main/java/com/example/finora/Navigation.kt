@@ -70,6 +70,7 @@ fun MainNavigation(dataStore: FinoraDataStore) {
                     onNavigateToGoalDetail = { id -> backStack.add(GoalDetailRoute(goalId = id)) },
                     onNavigateToAddGoal = { backStack.add(AddGoalRoute()) },
                     onNavigateToWallets = { backStack.add(WalletListRoute) },
+                    onNavigateToTransfer = { backStack.add(TransferRoute) },
                     onNavigateToBudgets = { backStack.add(BudgetListRoute) },
                     onNavigateToBills = { backStack.add(BillListRoute) },
                     onNavigateToRecurring = { backStack.add(RecurringListRoute) },
@@ -255,7 +256,9 @@ fun MainNavigation(dataStore: FinoraDataStore) {
                     viewModel = vm,
                     onNavigateBack = { backStack.removeLastOrNull() },
                     onNavigateToTransactionDetail = { id -> backStack.add(TransactionDetailRoute(transactionId = id)) },
-                    onNavigateToGoalDetail = { id -> backStack.add(GoalDetailRoute(goalId = id)) }
+                    onNavigateToGoalDetail = { id -> backStack.add(GoalDetailRoute(goalId = id)) },
+                    onNavigateToWallets = { backStack.add(WalletListRoute) },
+                    onNavigateToBills = { backStack.add(BillListRoute) }
                 )
             }
 

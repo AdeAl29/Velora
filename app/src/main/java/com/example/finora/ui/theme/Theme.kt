@@ -1,15 +1,18 @@
 package com.example.finora.ui.theme
 
 import android.app.Activity
-import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
+
+val LocalIsDarkTheme = compositionLocalOf { true }
 
 private val FinoraDarkColorScheme = darkColorScheme(
     primary = FinoraPrimary,
@@ -92,41 +95,46 @@ fun FinoraTheme(
         }
     }
 
-    MaterialTheme(
-        colorScheme = colorScheme,
-        typography = FinoraTypography,
-        content = content
-    )
+    CompositionLocalProvider(LocalIsDarkTheme provides darkTheme) {
+        MaterialTheme(
+            colorScheme = colorScheme,
+            typography = FinoraTypography,
+            content = content
+        )
+    }
 }
 
 // Extended color accessors
 object FinoraColors {
     @Composable
-    fun income() = if (isSystemInDarkTheme()) FinoraIncome else FinoraIncomeDark
+    fun isDark() = LocalIsDarkTheme.current
 
     @Composable
-    fun expense() = if (isSystemInDarkTheme()) FinoraExpense else FinoraExpenseDark
+    fun income() = if (LocalIsDarkTheme.current) FinoraIncome else FinoraIncomeDark
 
     @Composable
-    fun warning() = if (isSystemInDarkTheme()) FinoraWarning else FinoraWarningDark
+    fun expense() = if (LocalIsDarkTheme.current) FinoraExpense else FinoraExpenseDark
 
     @Composable
-    fun incomeContainer() = if (isSystemInDarkTheme()) FinoraIncomeContainer else FinoraIncomeContainerLight
+    fun warning() = if (LocalIsDarkTheme.current) FinoraWarning else FinoraWarningDark
 
     @Composable
-    fun expenseContainer() = if (isSystemInDarkTheme()) FinoraExpenseContainer else FinoraExpenseContainerLight
+    fun incomeContainer() = if (LocalIsDarkTheme.current) FinoraIncomeContainer else FinoraIncomeContainerLight
 
     @Composable
-    fun warningContainer() = if (isSystemInDarkTheme()) FinoraWarningContainer else FinoraWarningContainerLight
+    fun expenseContainer() = if (LocalIsDarkTheme.current) FinoraExpenseContainer else FinoraExpenseContainerLight
 
     @Composable
-    fun surfaceElevated() = if (isSystemInDarkTheme()) FinoraDarkSurfaceElevated else FinoraLightSurfaceElevated
+    fun warningContainer() = if (LocalIsDarkTheme.current) FinoraWarningContainer else FinoraWarningContainerLight
 
     @Composable
-    fun textTertiary() = if (isSystemInDarkTheme()) FinoraDarkTextTertiary else FinoraLightTextTertiary
+    fun surfaceElevated() = if (LocalIsDarkTheme.current) FinoraDarkSurfaceElevated else FinoraLightSurfaceElevated
 
     @Composable
-    fun cardGradient() = if (isSystemInDarkTheme()) FinoraCardGradient else FinoraCardGradientLight
+    fun textTertiary() = if (LocalIsDarkTheme.current) FinoraDarkTextTertiary else FinoraLightTextTertiary
+
+    @Composable
+    fun cardGradient() = if (LocalIsDarkTheme.current) FinoraCardGradient else FinoraCardGradientLight
 }
 
 internal fun android.content.Context.findActivity(): Activity? {

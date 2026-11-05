@@ -76,27 +76,29 @@ class BudgetViewModel @Inject constructor(
         val endOfMonth = DateUtils.getEndOfMonth()
 
         viewModelScope.launch {
-            budgetRepository.observeAll().collect { budgetList ->
+            combine(
+                budgetRepository.observeAll(),
+                transactionRepository.observeByDateRange(startOfMonth, endOfMonth),
+                categoryRepository.observeAll()
+            ) { budgetList, monthTransactions, _ ->
                 val detailed = budgetList.map { budget ->
                     val category = categoryRepository.getById(budget.categoryId)
-                    val spent = transactionRepository.observeExpenseByCategory(
-                        budget.categoryId,
-                        startOfMonth,
-                        endOfMonth
-                    ).first()
-                    val pct = if (budget.amount > 0) (spent.toFloat() / budget.amount * 100) else 0f
+                    val spent = monthTransactions
+                        .filter { it.categoryId == budget.categoryId && it.transactionType != "INCOME" }
+                        .sumOf { it.amount }
+                    val pct = if (budget.amount > 0) (spent.toFloat() / budget.amount * 100f) else 0f
                     BudgetWithDetails(budget, category, spent, pct)
                 }
                 val totalB = detailed.sumOf { it.budget.amount }
                 val totalS = detailed.sumOf { it.spentAmount }
-                _listState.update {
-                    it.copy(
-                        budgets = detailed,
-                        totalBudget = totalB,
-                        totalSpent = totalS,
-                        isLoading = false
-                    )
-                }
+                BudgetListUiState(
+                    budgets = detailed,
+                    totalBudget = totalB,
+                    totalSpent = totalS,
+                    isLoading = false
+                )
+            }.collect { newState ->
+                _listState.value = newState
             }
         }
     }

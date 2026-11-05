@@ -296,7 +296,7 @@ fun StatisticsScreen(
                     }
                 }
 
-                item { Spacer(modifier = Modifier.height(48.dp)) }
+                item { Spacer(modifier = Modifier.height(100.dp)) }
             }
         }
     }

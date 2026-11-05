@@ -154,6 +154,7 @@ class GoalRepository @Inject constructor(
     suspend fun addFunds(id: Long, amount: Long) = goalDao.addFunds(id, amount)
     suspend fun removeFunds(id: Long, amount: Long) = goalDao.removeFunds(id, amount)
     suspend fun markCompleted(id: Long) = goalDao.markCompleted(id)
+    suspend fun markIncomplete(id: Long) = goalDao.markIncomplete(id)
 }
 
 @Singleton

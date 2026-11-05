@@ -2,15 +2,16 @@ package com.example.finora.ui.screen.transaction
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.finora.core.audio.SoundEffectManager
 import com.example.finora.core.database.entity.*
 import com.example.finora.core.model.TransactionType
 import com.example.finora.core.repository.*
 import com.example.finora.core.util.DateUtils
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
-import com.example.finora.core.audio.SoundEffectManager
 
 data class AddTransactionUiState(
     val transactionType: TransactionType = TransactionType.EXPENSE_VARIABLE,
@@ -47,48 +48,62 @@ class AddTransactionViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(AddTransactionUiState())
     val uiState: StateFlow<AddTransactionUiState> = _uiState.asStateFlow()
 
+    private var categoryJob: Job? = null
+
     init {
         loadWallets()
-        loadCategories()
+        filterCategoriesByType()
     }
 
     private fun loadWallets() {
         viewModelScope.launch {
             walletRepository.observeAll().collect { wallets ->
-                _uiState.update { it.copy(wallets = wallets) }
-                // Auto-select first wallet if none selected
-                if (_uiState.value.selectedWalletId == null && wallets.isNotEmpty()) {
-                    _uiState.update { it.copy(selectedWalletId = wallets.first().id, selectedWallet = wallets.first()) }
+                _uiState.update { state ->
+                    val currentId = state.selectedWalletId ?: wallets.firstOrNull()?.id
+                    val currentWallet = wallets.find { it.id == currentId } ?: wallets.firstOrNull()
+                    state.copy(
+                        wallets = wallets,
+                        selectedWalletId = currentId,
+                        selectedWallet = currentWallet
+                    )
                 }
             }
         }
     }
 
-    private fun loadCategories() {
-        viewModelScope.launch {
-            categoryRepository.observeAll().collect { categories ->
-                _uiState.update { it.copy(categories = categories) }
-                filterCategoriesByType()
-            }
-        }
-    }
-
     fun setTransactionType(type: TransactionType) {
-        _uiState.update { it.copy(transactionType = type, selectedCategoryId = null, selectedCategory = null) }
+        if (_uiState.value.transactionType == type && _uiState.value.categories.isNotEmpty()) return
+        _uiState.update {
+            it.copy(
+                transactionType = type,
+                selectedCategoryId = null,
+                selectedCategory = null,
+                categoryError = null
+            )
+        }
         filterCategoriesByType()
     }
 
     private fun filterCategoriesByType() {
         val type = _uiState.value.transactionType.name
-        viewModelScope.launch {
+        categoryJob?.cancel()
+        categoryJob = viewModelScope.launch {
             categoryRepository.observeByType(type).collect { filtered ->
-                _uiState.update { it.copy(categories = filtered) }
+                _uiState.update { state ->
+                    val validSelectedId = state.selectedCategoryId?.takeIf { id -> filtered.any { it.id == id } }
+                        ?: filtered.firstOrNull()?.id
+                    val validSelectedCat = filtered.find { it.id == validSelectedId }
+                    state.copy(
+                        categories = filtered,
+                        selectedCategoryId = validSelectedId,
+                        selectedCategory = validSelectedCat
+                    )
+                }
             }
         }
     }
 
     fun setAmount(amount: String) {
-        // Only allow digits
         val cleaned = amount.filter { it.isDigit() }
         _uiState.update { it.copy(amount = cleaned, amountError = null) }
     }
@@ -140,6 +155,7 @@ class AddTransactionViewModel @Inject constructor(
                     isRecurring = tx.isRecurring
                 )
             }
+            filterCategoriesByType()
         }
     }
 
@@ -164,7 +180,6 @@ class AddTransactionViewModel @Inject constructor(
     fun save() {
         val state = _uiState.value
 
-        // Validate
         var hasError = false
         val amountLong = state.amount.toLongOrNull()
         if (amountLong == null || amountLong <= 0) {

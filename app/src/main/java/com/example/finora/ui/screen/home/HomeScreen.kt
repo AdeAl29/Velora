@@ -2,11 +2,13 @@ package com.example.finora.ui.screen.home
 
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
@@ -15,8 +17,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -34,6 +36,11 @@ fun HomeScreen(
     onNavigateToAllGoals: () -> Unit,
     onNavigateToGoalDetail: (Long) -> Unit,
     onNavigateToSearch: () -> Unit,
+    onNavigateToWallets: () -> Unit = {},
+    onNavigateToTransfer: () -> Unit = {},
+    onNavigateToBudgets: () -> Unit = {},
+    onNavigateToBills: () -> Unit = {},
+    onNavigateToCalendar: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -47,18 +54,18 @@ fun HomeScreen(
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(top = 12.dp, bottom = 100.dp),
+        contentPadding = PaddingValues(top = 12.dp, bottom = 115.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
         // Greeting Header
         item {
-            Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
+            Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text(
                             text = "${DateUtils.getGreeting()} ${DateUtils.getGreetingEmoji()}",
                             style = MaterialTheme.typography.titleSmall,
@@ -71,18 +78,35 @@ fun HomeScreen(
                             color = MaterialTheme.colorScheme.onBackground
                         )
                     }
-                    IconButton(
-                        onClick = onNavigateToSearch,
-                        modifier = Modifier
-                            .size(44.dp)
-                            .clip(androidx.compose.foundation.shape.CircleShape)
-                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                    ) {
-                        Icon(
-                            Icons.Rounded.Search,
-                            contentDescription = "Cari",
-                            tint = MaterialTheme.colorScheme.onSurface
-                        )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        IconButton(
+                            onClick = onNavigateToCalendar,
+                            modifier = Modifier
+                                .size(42.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
+                        ) {
+                            Icon(
+                                Icons.Rounded.CalendarMonth,
+                                contentDescription = "Kalender Keuangan",
+                                tint = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        IconButton(
+                            onClick = onNavigateToSearch,
+                            modifier = Modifier
+                                .size(42.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
+                        ) {
+                            Icon(
+                                Icons.Rounded.Search,
+                                contentDescription = "Cari",
+                                tint = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -102,6 +126,81 @@ fun HomeScreen(
             )
         }
 
+        // iOS-Style Quick Action Pills
+        item {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                HomeQuickActionButton(
+                    icon = Icons.Rounded.SwapHoriz,
+                    label = "Transfer",
+                    color = Color(0xFF38BDF8),
+                    onClick = onNavigateToTransfer,
+                    modifier = Modifier.weight(1f)
+                )
+                HomeQuickActionButton(
+                    icon = Icons.Rounded.AccountBalanceWallet,
+                    label = "Rekening",
+                    color = Color(0xFF818CF8),
+                    onClick = onNavigateToWallets,
+                    modifier = Modifier.weight(1f)
+                )
+                HomeQuickActionButton(
+                    icon = Icons.Rounded.PieChart,
+                    label = "Anggaran",
+                    color = Color(0xFF34D399),
+                    onClick = onNavigateToBudgets,
+                    modifier = Modifier.weight(1f)
+                )
+                HomeQuickActionButton(
+                    icon = Icons.Rounded.ReceiptLong,
+                    label = "Tagihan",
+                    color = Color(0xFFFBBF24),
+                    badgeCount = uiState.unpaidBills.size,
+                    onClick = onNavigateToBills,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+
+        // Wallets Horizontal Carousel
+        if (uiState.wallets.isNotEmpty()) {
+            item {
+                Column {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        SectionHeader(title = "Rekening & Dompet")
+                        FinoraTextButton(text = "Kelola", onClick = onNavigateToWallets)
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        contentPadding = PaddingValues(horizontal = 20.dp)
+                    ) {
+                        items(uiState.wallets, key = { it.wallet.id }) { walletWithBalance ->
+                            FinoraWalletCard(
+                                name = walletWithBalance.wallet.name,
+                                iconName = walletWithBalance.wallet.iconName,
+                                colorHex = walletWithBalance.wallet.colorHex,
+                                balance = if (uiState.isBalanceHidden) 0L else walletWithBalance.balance,
+                                onClick = onNavigateToWallets,
+                                modifier = Modifier.width(168.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
         // Monthly Summary
         item {
             Column(modifier = Modifier.padding(horizontal = 20.dp)) {
@@ -113,13 +212,13 @@ fun HomeScreen(
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     SummaryCard(
-                        title = "Tabungan",
+                        title = "Arus Kas Bersih",
                         amount = uiState.monthlySavings,
                         isPositive = uiState.monthlySavings >= 0,
                         modifier = Modifier.weight(1f)
                     )
                     SummaryCard(
-                        title = "Tersisa",
+                        title = "Sisa Pemasukan",
                         amount = null,
                         percentage = uiState.percentRemaining,
                         modifier = Modifier.weight(1f)
@@ -128,40 +227,11 @@ fun HomeScreen(
             }
         }
 
-        // Expense Chart
-        if (uiState.categoryExpenses.isNotEmpty()) {
-            item {
-                Column(modifier = Modifier.padding(horizontal = 20.dp)) {
-                    SectionHeader(title = "Pengeluaran per Kategori")
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Card(
-                        shape = RoundedCornerShape(20.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surface
-                        )
-                    ) {
-                        FinoraDonutChart(
-                            data = uiState.categoryExpenses.take(6).map { ce ->
-                                ChartDataPoint(
-                                    label = ce.categoryName,
-                                    value = ce.amount.toFloat(),
-                                    color = getCategoryColor(ce.categoryColorHex)
-                                )
-                            },
-                            centerText = CurrencyFormatter.formatCompact(uiState.monthlyExpense),
-                            modifier = Modifier.padding(20.dp)
-                        )
-                    }
-                }
-            }
-        }
-
         // Fixed vs Variable Expense
         if (uiState.fixedExpense > 0 || uiState.variableExpense > 0) {
             item {
                 Column(modifier = Modifier.padding(horizontal = 20.dp)) {
-                    SectionHeader(title = "Pengeluaran")
+                    SectionHeader(title = "Komposisi Pengeluaran")
                     Spacer(modifier = Modifier.height(12.dp))
 
                     Row(
@@ -182,6 +252,61 @@ fun HomeScreen(
                         )
                     }
                 }
+            }
+        }
+
+        // Expense Chart
+        if (uiState.categoryExpenses.isNotEmpty()) {
+            item {
+                Column(modifier = Modifier.padding(horizontal = 20.dp)) {
+                    SectionHeader(title = "Pengeluaran per Kategori")
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Card(
+                        shape = RoundedCornerShape(22.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surface
+                        )
+                    ) {
+                        FinoraDonutChart(
+                            data = uiState.categoryExpenses.take(6).map { ce ->
+                                ChartDataPoint(
+                                    label = ce.categoryName,
+                                    value = ce.amount.toFloat(),
+                                    color = getCategoryColor(ce.categoryColorHex)
+                                )
+                            },
+                            centerText = CurrencyFormatter.formatCompact(uiState.monthlyExpense),
+                            modifier = Modifier.padding(20.dp)
+                        )
+                    }
+                }
+            }
+        }
+
+        // Unpaid Bills Section
+        if (uiState.unpaidBills.isNotEmpty()) {
+            item {
+                Column(modifier = Modifier.padding(horizontal = 20.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        SectionHeader(title = "Tagihan Mendatang")
+                        FinoraTextButton(text = "Lihat Semua", onClick = onNavigateToBills)
+                    }
+                }
+            }
+            items(uiState.unpaidBills, key = { "bill_${it.id}" }) { bill ->
+                FinoraBillCard(
+                    name = bill.name,
+                    amount = bill.amount,
+                    dueDate = bill.dueDate,
+                    isPaid = bill.isPaid,
+                    onClick = onNavigateToBills,
+                    modifier = Modifier.padding(horizontal = 20.dp)
+                )
             }
         }
 
@@ -252,31 +377,72 @@ fun HomeScreen(
                 )
             }
         }
+    }
+}
 
-        // Wallets
-        if (uiState.wallets.isNotEmpty()) {
-            item {
-                Column(modifier = Modifier.padding(horizontal = 20.dp)) {
-                    SectionHeader(title = "Rekening")
-                    Spacer(modifier = Modifier.height(12.dp))
-                }
-
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    contentPadding = PaddingValues(horizontal = 20.dp)
+@Composable
+private fun HomeQuickActionButton(
+    icon: ImageVector,
+    label: String,
+    color: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    badgeCount: Int = 0
+) {
+    Card(
+        modifier = modifier
+            .clip(RoundedCornerShape(18.dp))
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 12.dp, horizontal = 6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Box {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(color.copy(alpha = 0.14f)),
+                    contentAlignment = Alignment.Center
                 ) {
-                    items(uiState.wallets, key = { it.wallet.id }) { walletWithBalance ->
-                        FinoraWalletCard(
-                            name = walletWithBalance.wallet.name,
-                            iconName = walletWithBalance.wallet.iconName,
-                            colorHex = walletWithBalance.wallet.colorHex,
-                            balance = walletWithBalance.balance,
-                            onClick = { },
-                            modifier = Modifier.width(160.dp)
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = label,
+                        tint = color,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                if (badgeCount > 0) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .offset(x = 4.dp, y = (-4).dp)
+                            .size(18.dp)
+                            .clip(CircleShape)
+                            .background(FinoraExpense),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = badgeCount.toString(),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold
                         )
                     }
                 }
             }
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
         }
     }
 }
@@ -300,7 +466,7 @@ private fun SummaryCard(
 ) {
     Card(
         modifier = modifier,
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         )
@@ -313,8 +479,9 @@ private fun SummaryCard(
             )
             Spacer(modifier = Modifier.height(6.dp))
             if (amount != null) {
+                val sign = if (amount > 0) "+" else if (amount < 0) "-" else ""
                 Text(
-                    text = CurrencyFormatter.formatRupiah(kotlin.math.abs(amount)),
+                    text = "$sign${CurrencyFormatter.formatRupiah(kotlin.math.abs(amount))}",
                     style = FinoraTextStyles.currencyAmount,
                     color = if (isPositive) FinoraColors.income() else FinoraColors.expense()
                 )
@@ -340,7 +507,7 @@ private fun ExpenseTypeCard(
 ) {
     Card(
         modifier = modifier,
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         )

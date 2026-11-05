@@ -208,6 +208,52 @@ fun AddBillScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
+            // Category Selection
+            if (addState.categories.isNotEmpty()) {
+                Text("Kategori Tagihan", style = FinoraTextStyles.sectionTitle, color = MaterialTheme.colorScheme.onBackground)
+                Spacer(modifier = Modifier.height(10.dp))
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    items(addState.categories, key = { it.id }) { cat ->
+                        val isSelected = cat.id == addState.selectedCategoryId
+                        val color = getCategoryColor(cat.colorHex)
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = { viewModel.setCategory(if (isSelected) null else cat.id) },
+                            label = { Text(cat.name) },
+                            leadingIcon = {
+                                FinoraCategoryIcon(iconName = cat.iconName, color = color, size = 16.dp)
+                            },
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(20.dp))
+            }
+
+            // Wallet Selection
+            if (addState.wallets.isNotEmpty()) {
+                Text("Rekening Pembayaran", style = FinoraTextStyles.sectionTitle, color = MaterialTheme.colorScheme.onBackground)
+                Spacer(modifier = Modifier.height(10.dp))
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    items(addState.wallets, key = { it.id }) { wallet ->
+                        val isSelected = wallet.id == addState.selectedWalletId
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = { viewModel.setWallet(wallet.id) },
+                            label = { Text(wallet.name) },
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(24.dp))
+            }
+
             // Reminder Days
             Text("Pengingat Sebelum Jatuh Tempo", style = FinoraTextStyles.sectionTitle, color = MaterialTheme.colorScheme.onBackground)
             Spacer(modifier = Modifier.height(12.dp))

@@ -2,10 +2,11 @@ package com.example.finora.ui.screen.goal
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.finora.core.audio.SoundEffectManager
 import com.example.finora.core.database.entity.FinancialGoalEntity
 import com.example.finora.core.repository.GoalRepository
-import com.example.finora.core.util.DateUtils
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -37,7 +38,8 @@ data class AddGoalUiState(
 
 @HiltViewModel
 class GoalViewModel @Inject constructor(
-    private val goalRepository: GoalRepository
+    private val goalRepository: GoalRepository,
+    private val soundEffectManager: SoundEffectManager
 ) : ViewModel() {
 
     private val _listState = MutableStateFlow(GoalListUiState())
@@ -48,6 +50,8 @@ class GoalViewModel @Inject constructor(
 
     private val _selectedGoal = MutableStateFlow<FinancialGoalEntity?>(null)
     val selectedGoal: StateFlow<FinancialGoalEntity?> = _selectedGoal.asStateFlow()
+
+    private var detailJob: Job? = null
 
     init {
         loadGoals()
@@ -76,7 +80,8 @@ class GoalViewModel @Inject constructor(
     }
 
     fun loadGoalDetail(id: Long) {
-        viewModelScope.launch {
+        detailJob?.cancel()
+        detailJob = viewModelScope.launch {
             goalRepository.observeById(id).collect { goal ->
                 _selectedGoal.value = goal
             }
@@ -133,8 +138,8 @@ class GoalViewModel @Inject constructor(
     }
 
     fun resetAddState() {
-        val nextYear = LocalDate.now().plusMonths(6).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
-        _addState.value = AddGoalUiState(deadline = nextYear)
+        val nextSixMonths = LocalDate.now().plusMonths(6).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+        _addState.value = AddGoalUiState(deadline = nextSixMonths)
     }
 
     fun saveGoal() {
@@ -170,6 +175,7 @@ class GoalViewModel @Inject constructor(
             } else {
                 goalRepository.insert(goal)
             }
+            soundEffectManager.playSuccess()
             _addState.update { it.copy(isLoading = false, isSaved = true) }
         }
     }
@@ -180,6 +186,9 @@ class GoalViewModel @Inject constructor(
             val updated = goalRepository.getById(goalId)
             if (updated != null && updated.currentAmount >= updated.targetAmount) {
                 goalRepository.markCompleted(goalId)
+                soundEffectManager.playChaChing()
+            } else {
+                soundEffectManager.playSuccess()
             }
         }
     }
@@ -187,6 +196,10 @@ class GoalViewModel @Inject constructor(
     fun removeFunds(goalId: Long, amount: Long) {
         viewModelScope.launch {
             goalRepository.removeFunds(goalId, amount)
+            val updated = goalRepository.getById(goalId)
+            if (updated != null && updated.currentAmount < updated.targetAmount) {
+                goalRepository.markIncomplete(goalId)
+            }
         }
     }
 

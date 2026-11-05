@@ -3,13 +3,11 @@ package com.example.finora.ui.screen.wallet
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.finora.core.database.entity.WalletEntity
+import com.example.finora.core.repository.TransactionRepository
 import com.example.finora.core.repository.WalletRepository
 import com.example.finora.ui.screen.home.WalletWithBalance
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -33,7 +31,8 @@ data class AddWalletUiState(
 
 @HiltViewModel
 class WalletViewModel @Inject constructor(
-    private val walletRepository: WalletRepository
+    private val walletRepository: WalletRepository,
+    private val transactionRepository: TransactionRepository
 ) : ViewModel() {
 
     private val _listState = MutableStateFlow(WalletListUiState())
@@ -48,12 +47,18 @@ class WalletViewModel @Inject constructor(
 
     fun loadWallets() {
         viewModelScope.launch {
-            walletRepository.observeAll().collect { walletEntities ->
+            combine(
+                walletRepository.observeAll(),
+                transactionRepository.observeAll(),
+                walletRepository.observeTransfers()
+            ) { walletEntities, _, _ ->
                 val list = walletEntities.map { wallet ->
                     val balance = walletRepository.getWalletBalance(wallet.id)
                     WalletWithBalance(wallet, balance)
                 }
                 val total = list.sumOf { it.balance }
+                list to total
+            }.collect { (list, total) ->
                 _listState.update {
                     it.copy(
                         wallets = list,

@@ -7,12 +7,16 @@ import com.example.finora.core.repository.*
 import com.example.finora.core.util.DateUtils
 import com.example.finora.ui.screen.home.TransactionWithCategory
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 data class TransactionListUiState(
     val transactions: Map<String, List<TransactionWithCategory>> = emptyMap(),
+    val filteredIncome: Long = 0,
+    val filteredExpense: Long = 0,
+    val totalCount: Int = 0,
     val categories: List<CategoryEntity> = emptyList(),
     val wallets: List<WalletEntity> = emptyList(),
     val searchQuery: String = "",
@@ -34,6 +38,8 @@ class TransactionListViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(TransactionListUiState())
     val uiState: StateFlow<TransactionListUiState> = _uiState.asStateFlow()
 
+    private var loadJob: Job? = null
+
     init {
         loadData()
     }
@@ -53,15 +59,21 @@ class TransactionListViewModel @Inject constructor(
     }
 
     private fun loadTransactions() {
-        viewModelScope.launch {
-            val state = _uiState.value
-            val flow = if (state.searchQuery.isNotBlank()) {
-                transactionRepository.search(state.searchQuery)
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch {
+            val query = _uiState.value.searchQuery
+            val flow = if (query.isNotBlank()) {
+                transactionRepository.search(query.trim())
             } else {
                 transactionRepository.observeAll()
             }
 
-            flow.collect { transactions ->
+            combine(
+                flow,
+                categoryRepository.observeAll(),
+                walletRepository.observeAll()
+            ) { transactions, _, _ ->
+                val state = _uiState.value
                 var filtered = transactions
 
                 // Apply filters
@@ -79,7 +91,9 @@ class TransactionListViewModel @Inject constructor(
                     filtered = filtered.sortedByDescending { it.amount }
                 }
 
-                // Enrich with category/wallet data
+                val totalInc = filtered.filter { it.transactionType == "INCOME" }.sumOf { it.amount }
+                val totalExp = filtered.filter { it.transactionType != "INCOME" }.sumOf { it.amount }
+
                 val enriched = filtered.map { tx ->
                     val cat = tx.categoryId?.let { categoryRepository.getById(it) }
                     val wallet = walletRepository.getById(tx.walletId)
@@ -92,12 +106,15 @@ class TransactionListViewModel @Inject constructor(
                     )
                 }
 
-                // Group by date
                 val grouped = enriched.groupBy { DateUtils.getDateGroupKey(it.transaction.date) }
-
+                Triple(grouped, totalInc to totalExp, enriched.size)
+            }.collect { (grouped, totals, count) ->
                 _uiState.update {
                     it.copy(
                         transactions = grouped,
+                        filteredIncome = totals.first,
+                        filteredExpense = totals.second,
+                        totalCount = count,
                         isLoading = false,
                         isEmpty = grouped.isEmpty()
                     )

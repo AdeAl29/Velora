@@ -38,6 +38,8 @@ class ReportViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(ReportUiState())
     val uiState: StateFlow<ReportUiState> = _uiState.asStateFlow()
 
+    private var reportJob: kotlinx.coroutines.Job? = null
+
     init {
         loadReport(StatPeriod.THIS_MONTH)
     }
@@ -57,7 +59,8 @@ class ReportViewModel @Inject constructor(
             StatPeriod.THIS_YEAR -> DateUtils.getStartOfYear() to DateUtils.getEndOfYear()
         }
 
-        viewModelScope.launch {
+        reportJob?.cancel()
+        reportJob = viewModelScope.launch {
             combine(
                 transactionRepository.observeTotalIncome(startDate, endDate),
                 transactionRepository.observeTotalExpense(startDate, endDate),

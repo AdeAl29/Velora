@@ -59,6 +59,8 @@ class StatisticsViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(StatisticsUiState())
     val uiState: StateFlow<StatisticsUiState> = _uiState.asStateFlow()
 
+    private var statsJob: kotlinx.coroutines.Job? = null
+
     init {
         loadStatistics(StatPeriod.THIS_MONTH)
     }
@@ -71,7 +73,8 @@ class StatisticsViewModel @Inject constructor(
     private fun loadStatistics(period: StatPeriod) {
         val (startDate, endDate) = getDateRange(period)
 
-        viewModelScope.launch {
+        statsJob?.cancel()
+        statsJob = viewModelScope.launch {
             combine(
                 transactionRepository.observeTotalIncome(startDate, endDate),
                 transactionRepository.observeTotalExpense(startDate, endDate),

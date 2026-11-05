@@ -40,6 +40,9 @@ interface GoalDao {
     @Query("UPDATE financial_goals SET isCompleted = 1 WHERE id = :id")
     suspend fun markCompleted(id: Long)
 
+    @Query("UPDATE financial_goals SET isCompleted = 0 WHERE id = :id")
+    suspend fun markIncomplete(id: Long)
+
     @Query("SELECT COUNT(*) FROM financial_goals WHERE isCompleted = 0")
     fun observeActiveCount(): Flow<Int>
 
