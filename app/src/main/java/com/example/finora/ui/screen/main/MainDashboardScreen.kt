@@ -6,6 +6,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -17,8 +18,19 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -33,6 +45,7 @@ import com.example.finora.ui.screen.statistics.StatisticsViewModel
 import com.example.finora.ui.screen.transaction.TransactionListScreen
 import com.example.finora.ui.screen.transaction.TransactionListViewModel
 import com.example.finora.ui.theme.*
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -55,6 +68,78 @@ fun MainDashboardScreen(
     var selectedTabIndex by rememberSaveable { mutableIntStateOf(0) }
     var showAddSheet by rememberSaveable { mutableStateOf(false) }
 
+    // iOS 26 Liquid Glass Dynamic States:
+    // 1. isBottomBarMinimized: shrinks into a compact active-tab pill when scrolling down
+    // 2. isBottomBarIdle: enters ultra-translucent ambient glass state when untouched for 3.5s
+    var isBottomBarMinimized by rememberSaveable { mutableStateOf(false) }
+    var isBottomBarIdle by remember { mutableStateOf(false) }
+    var interactionTick by remember { mutableLongStateOf(0L) }
+
+    // Real-time GraphicsLayer capturing content underneath for iOS Liquid Glass backdrop blur
+    val backdropGraphicsLayer = rememberGraphicsLayer()
+    var rootOffsetInWindow by remember { mutableStateOf(Offset.Zero) }
+
+    // Reset minimize & idle state whenever the user switches tabs
+    LaunchedEffect(selectedTabIndex) {
+        isBottomBarMinimized = false
+        isBottomBarIdle = false
+        interactionTick++
+    }
+
+    // Idle / untouched timer (3.5 seconds without touch or scroll -> Ambient Liquid Glass)
+    LaunchedEffect(interactionTick, showAddSheet) {
+        isBottomBarIdle = false
+        if (!showAddSheet) {
+            delay(3500L)
+            isBottomBarIdle = true
+        }
+    }
+
+    // iOS `.tabBarMinimizeBehavior(.onScrollDown)` detector across all LazyColumns
+    val nestedScrollConnection = remember {
+        object : NestedScrollConnection {
+            private var scrollDeltaAccumulator = 0f
+
+            override fun onPostScroll(
+                consumed: Offset,
+                available: Offset,
+                source: NestedScrollSource
+            ): Offset {
+                val deltaY = consumed.y
+                if (deltaY != 0f) {
+                    interactionTick++
+                }
+
+                when {
+                    // User is scrolling DOWN (content moves up) -> accumulate negative delta to minimize
+                    deltaY < -0.5f -> {
+                        if (scrollDeltaAccumulator > 0f) scrollDeltaAccumulator = 0f
+                        scrollDeltaAccumulator += deltaY
+                        if (scrollDeltaAccumulator < -28f && !isBottomBarMinimized) {
+                            isBottomBarMinimized = true
+                            scrollDeltaAccumulator = 0f
+                        }
+                    }
+                    // User is scrolling UP (content moves down) -> accumulate positive delta to expand
+                    deltaY > 0.5f -> {
+                        if (scrollDeltaAccumulator < 0f) scrollDeltaAccumulator = 0f
+                        scrollDeltaAccumulator += deltaY
+                        if (scrollDeltaAccumulator > 20f && isBottomBarMinimized) {
+                            isBottomBarMinimized = false
+                            scrollDeltaAccumulator = 0f
+                        }
+                    }
+                    // User pulled down while already at the very top of the list -> ensure expanded
+                    available.y > 10f -> {
+                        isBottomBarMinimized = false
+                        scrollDeltaAccumulator = 0f
+                    }
+                }
+                return Offset.Zero
+            }
+        }
+    }
+
     BackHandler(enabled = selectedTabIndex != 0) {
         selectedTabIndex = 0
     }
@@ -62,7 +147,7 @@ fun MainDashboardScreen(
     if (showAddSheet) {
         ModalBottomSheet(
             onDismissRequest = { showAddSheet = false },
-            containerColor = MaterialTheme.colorScheme.surface,
+            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
             shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
             tonalElevation = 8.dp
         ) {
@@ -174,81 +259,123 @@ fun MainDashboardScreen(
             modifier = modifier
                 .fillMaxSize()
                 .padding(top = paddingValues.calculateTopPadding())
+                .nestedScroll(nestedScrollConnection)
+                .pointerInput(Unit) {
+                    awaitEachGesture {
+                        // Observe initial pointer pass without consuming so all buttons/scrolls work normally
+                        awaitPointerEvent(pass = PointerEventPass.Initial)
+                        isBottomBarIdle = false
+                        interactionTick++
+                    }
+                }
         ) {
-            // Content area that extends behind the floating iOS bottom bar
-            AnimatedContent(
-                targetState = selectedTabIndex,
-                transitionSpec = {
-                    val direction = if (targetState > initialState) 1 else -1
-                    (fadeIn(animationSpec = tween(220)) +
-                        slideInHorizontally(animationSpec = tween(240)) { (it * 0.06f * direction).toInt() })
-                        .togetherWith(
-                            fadeOut(animationSpec = tween(160)) +
-                                slideOutHorizontally(animationSpec = tween(200)) { (-it * 0.04f * direction).toInt() }
-                        )
-                },
-                label = "main_tab_transition",
-                modifier = Modifier.fillMaxSize()
-            ) { tabIndex ->
-                when (tabIndex) {
-                    0 -> {
-                        val homeViewModel: HomeViewModel = hiltViewModel()
-                        HomeScreen(
-                            viewModel = homeViewModel,
-                            onNavigateToTransactionDetail = onNavigateToTransactionDetail,
-                            onNavigateToAllTransactions = { selectedTabIndex = 1 },
-                            onNavigateToAllGoals = { selectedTabIndex = 3 },
-                            onNavigateToGoalDetail = onNavigateToGoalDetail,
-                            onNavigateToSearch = onNavigateToSearch,
+            // Content area recorded into backdropGraphicsLayer so the floating iOS Liquid Glass
+            // bottom bar refracts and blurs the actual scrolling content in real time.
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .onGloballyPositioned { coords ->
+                        rootOffsetInWindow = coords.positionInWindow()
+                    }
+                    .drawWithContent {
+                        backdropGraphicsLayer.record {
+                            this@drawWithContent.drawContent()
+                        }
+                        drawLayer(backdropGraphicsLayer)
+                    }
+            ) {
+                AnimatedContent(
+                    targetState = selectedTabIndex,
+                    transitionSpec = {
+                        val direction = if (targetState > initialState) 1 else -1
+                        (fadeIn(animationSpec = tween(220)) +
+                            slideInHorizontally(animationSpec = tween(240)) { (it * 0.06f * direction).toInt() })
+                            .togetherWith(
+                                fadeOut(animationSpec = tween(160)) +
+                                    slideOutHorizontally(animationSpec = tween(200)) { (-it * 0.04f * direction).toInt() }
+                            )
+                    },
+                    label = "main_tab_transition",
+                    modifier = Modifier.fillMaxSize()
+                ) { tabIndex ->
+                    when (tabIndex) {
+                        0 -> {
+                            val homeViewModel: HomeViewModel = hiltViewModel()
+                            HomeScreen(
+                                viewModel = homeViewModel,
+                                onNavigateToTransactionDetail = onNavigateToTransactionDetail,
+                                onNavigateToAllTransactions = { selectedTabIndex = 1 },
+                                onNavigateToAllGoals = { selectedTabIndex = 3 },
+                                onNavigateToGoalDetail = onNavigateToGoalDetail,
+                                onNavigateToSearch = onNavigateToSearch,
+                                onNavigateToWallets = onNavigateToWallets,
+                                onNavigateToTransfer = onNavigateToTransfer,
+                                onNavigateToBudgets = onNavigateToBudgets,
+                                onNavigateToBills = onNavigateToBills,
+                                onNavigateToCalendar = onNavigateToCalendar
+                            )
+                        }
+                        1 -> {
+                            val transactionListViewModel: TransactionListViewModel = hiltViewModel()
+                            TransactionListScreen(
+                                viewModel = transactionListViewModel,
+                                onNavigateToDetail = onNavigateToTransactionDetail,
+                                onNavigateToAdd = { onNavigateToAddTransaction(null) }
+                            )
+                        }
+                        2 -> {
+                            val statisticsViewModel: StatisticsViewModel = hiltViewModel()
+                            StatisticsScreen(
+                                viewModel = statisticsViewModel,
+                                onNavigateBack = { selectedTabIndex = 0 }
+                            )
+                        }
+                        3 -> {
+                            val goalViewModel: GoalViewModel = hiltViewModel()
+                            GoalListScreen(
+                                viewModel = goalViewModel,
+                                onNavigateBack = { selectedTabIndex = 0 },
+                                onNavigateToAddGoal = onNavigateToAddGoal,
+                                onNavigateToGoalDetail = onNavigateToGoalDetail
+                            )
+                        }
+                        4 -> MoreScreen(
                             onNavigateToWallets = onNavigateToWallets,
-                            onNavigateToTransfer = onNavigateToTransfer,
                             onNavigateToBudgets = onNavigateToBudgets,
                             onNavigateToBills = onNavigateToBills,
-                            onNavigateToCalendar = onNavigateToCalendar
+                            onNavigateToRecurring = onNavigateToRecurring,
+                            onNavigateToCalendar = onNavigateToCalendar,
+                            onNavigateToReports = onNavigateToReports,
+                            onNavigateToSettings = onNavigateToSettings
                         )
                     }
-                    1 -> {
-                        val transactionListViewModel: TransactionListViewModel = hiltViewModel()
-                        TransactionListScreen(
-                            viewModel = transactionListViewModel,
-                            onNavigateToDetail = onNavigateToTransactionDetail,
-                            onNavigateToAdd = { onNavigateToAddTransaction(null) }
-                        )
-                    }
-                    2 -> {
-                        val statisticsViewModel: StatisticsViewModel = hiltViewModel()
-                        StatisticsScreen(
-                            viewModel = statisticsViewModel,
-                            onNavigateBack = { selectedTabIndex = 0 }
-                        )
-                    }
-                    3 -> {
-                        val goalViewModel: GoalViewModel = hiltViewModel()
-                        GoalListScreen(
-                            viewModel = goalViewModel,
-                            onNavigateBack = { selectedTabIndex = 0 },
-                            onNavigateToAddGoal = onNavigateToAddGoal,
-                            onNavigateToGoalDetail = onNavigateToGoalDetail
-                        )
-                    }
-                    4 -> MoreScreen(
-                        onNavigateToWallets = onNavigateToWallets,
-                        onNavigateToBudgets = onNavigateToBudgets,
-                        onNavigateToBills = onNavigateToBills,
-                        onNavigateToRecurring = onNavigateToRecurring,
-                        onNavigateToCalendar = onNavigateToCalendar,
-                        onNavigateToReports = onNavigateToReports,
-                        onNavigateToSettings = onNavigateToSettings
-                    )
                 }
             }
 
-            // Floating iOS Glassmorphic Bottom Bar overlaid at the bottom
+            // Floating iOS 26 Liquid Glass Bottom Bar overlaid at the bottom
             FinoraBottomNav(
                 selectedIndex = selectedTabIndex,
-                onItemSelected = { selectedTabIndex = it },
-                onAddClick = { showAddSheet = true },
+                onItemSelected = {
+                    selectedTabIndex = it
+                    isBottomBarMinimized = false
+                    isBottomBarIdle = false
+                    interactionTick++
+                },
+                onAddClick = {
+                    isBottomBarIdle = false
+                    interactionTick++
+                    showAddSheet = true
+                },
                 isAddSheetOpen = showAddSheet,
+                isMinimized = isBottomBarMinimized,
+                isIdle = isBottomBarIdle,
+                onExpandRequest = {
+                    isBottomBarMinimized = false
+                    isBottomBarIdle = false
+                    interactionTick++
+                },
+                backdropGraphicsLayer = backdropGraphicsLayer,
+                rootOffsetInWindow = rootOffsetInWindow,
                 modifier = Modifier.align(Alignment.BottomCenter)
             )
         }
